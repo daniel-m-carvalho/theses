@@ -1,0 +1,196 @@
+{
+  // ============================================================================
+  // Example configuration (JSONC — comments allowed; the app strips them before
+  // JSON.parse, see src/main.ts). Every field is annotated with its allowed
+  // values. Keys the library doesn't recognise are ignored, so this doubles as
+  // living documentation.
+  // ============================================================================
+
+  // Link the panels for cross-tree navigation.   true | false
+  "link": true,
+
+  // Tree-difference presentation. TOP-LEVEL on purpose: a comparison is a
+  // statement about the panels *together*, so one block configures all of them.
+  // (It used to sit inside each panel's `operators`, which allowed the two sides
+  // to disagree — including different `keyBy` values, whose key spaces can never
+  // correspond, silently breaking cross-tree highlighting.)
+  // Omit the whole block to attach no comparison operator at all.
+  "comparison": {
+    "enabled": true,        // start visible: true | false
+    "mode": "gradient",      // "gradient" (value scale on branches) | "membership"
+    "keyBy": "clade",        // match nodes by "clade" (leaf-set) Let's| "name"
+    "domain": [0, 1],        // gradient scale [min, max] (numbers)
+    "equalColor": "#0077bb", // hex color for "no difference"
+
+    // The library can draw a legend inside each panel; this app draws ONE in its
+    // own footer instead (see src/legend.ts). Two panels meant two identical
+    // ramps for a single comparison, floating over the canvas where they
+    // overlapped leaf labels.   true | false
+    "legend": false
+    // "stops": ["#d7191c", "#ffffbf", "#2c7bb6"], // custom gradient stops
+    // "colorNodes": false,     // gradient mode: also color node markers
+    // "legendLabels": ["different", "similar"] // gradient end labels
+  },
+
+  // One entry per panel. Two here = the side-by-side comparison view.
+  "panels": [
+    {
+      // Panel id — the APP's own label; the library ignores it. Used below to
+      // match this panel to a tree source under `app.sources.trees`.
+      "id": "upgma",
+
+      "viewer": {
+        "layoutMode": "cladogram", // "cladogram" | "phylogram"
+        "maxNodes": 50,            // leaf budget, any integer > 0
+        "reflect": false           // mirror horizontally: true | false
+        // "hideInternalNodes": true, // true | false (default true)
+        // "rerootOn": "SOME_LEAF",   // outgroup leaf/clade name (string)
+        // "fitPadding": 0.25,        // zoom-out margin after auto-fit (number)
+        // Swallow the browser's context menu inside THIS panel so a custom
+        // right-click menu isn't covered by it: true | false (default true).
+        // Set false to keep the native menu (e.g. for "Save image as…").
+        // "suppressContextMenu": true
+      },
+
+      "operators": {
+        "expandCollapse": {
+          "enabled": true,        // true | false
+          "depth": 4,             // opening depth (root = 0), integer >= 0
+          "mode": "incremental"   // "incremental" | "subtree"
+          // "minLeaves": 2,           // subtree mode: don't drill below N leaves
+          // "initialDepth": 4,        // override opening depth alone
+          // "expandDepth": 1,         // override per-expand depth alone
+          // "collapseMinLeaves": 3,   // don't offer collapse on tiny forks (integer)
+          // "toggleOnDoubleClick": true // true | false
+        },
+        "cladeShape": {
+          "enabled": true,        // true | false
+          "color": "#000000"      // any hex color; omit to follow the node color
+          // "towardRoot": true,       // point wedge back to root: true | false
+          // "hideMarker": true        // replace the collapsed marker: true | false
+        },
+        "selection": {
+          "enabled": true,          // true | false
+          "dragSelectEnabled": false // rectangular multi-select: true | false
+        },
+        "barcharts": {
+          "enabled": true,        // start visible: true | false
+          "scale": "log"       // "log" | "linnear" 
+        }
+      }
+    },
+    {
+      "id": "nj",
+
+      "viewer": {
+        "layoutMode": "cladogram", // "cladogram" | "phylogram"
+        "maxNodes": 50,            // any integer > 0
+        "reflect": true            // mirrored so the two trees face each other
+      },
+
+      "operators": {
+        "expandCollapse": {
+          "enabled": true,        // true | false
+          "depth": 3,             // integer >= 0
+          "mode": "subtree"       // "incremental" | "subtree"
+        },
+        "cladeShape": {
+          "enabled": true,        // true | false
+          "color": "#000000"      // hex color, or omit
+        },
+        "selection": {
+          "enabled": true,          // true | false
+          "dragSelectEnabled": false // true | false
+        },
+        "barcharts": {
+          "enabled": true,        // true | false
+          "scale": "log"       // "log" | "linear"
+        }
+      }
+    }
+  ],
+
+  // ==========================================================================
+  // Everything under `app` is owned by the APPLICATION, not the library. The
+  // library ignores it. Shown here to illustrate the split: the app reads these
+  // keys to fetch/parse trees and isolate data, then hands the parsed results to
+  // the library through `providers` (never a file path — the library never
+  // fetches).
+  // ==========================================================================
+  "app": {
+    "sources": {
+      // Tree files, keyed by panel id. Served from the repo-level datasets/
+      // folder (see vite.config.ts). Each path is a Newick (.nwk) file, whose
+      // leaf labels are STs. `species` selects which isolated_data entry below
+      // supplies this tree's metadata.
+      "trees": {
+        "upgma": { "file": "/gen_trees/vibrio-upgma-tree.nwk", "species": "vibrio" },
+        "nj": { "file": "/gen_trees/vibrio-nj-tree.nwk", "species": "vibrio" }
+      },
+
+      // Isolate metadata, as a LIST so more than one species can be supplied.
+      // Both panels here are the same species (vibrio), so one entry suffices —
+      // the file is fetched and parsed ONCE and shared by both panels. When the
+      // panels' trees are DIFFERENT species, add one entry per species; each
+      // tree is matched to its file by the `species` key on the tree above:
+      //   { "species": "clostridium", "file": "/isolated_data/clostridium.tsv" }
+      //
+      // Format: tab-separated (EnteroBase export, untouched). Row = one isolate;
+      // the "ST" column joins to the tree's leaf labels. Kept as TSV rather than
+      // CSV because fields contain unquoted commas (e.g. "SRA,GCF_900162645").
+      "isolated_data": [
+        { "species": "vibrio", "file": "/isolated_data/vibrio.tsv" }
+      ],
+
+      // TSV columns to load. Exactly ONE of them colours the bars at a time
+      // (`segmentBy`, switchable in the UI); every one of them can filter.
+      // Values are OR-ed within a key and AND-ed across keys, so
+      // "Country ∈ {Bangladesh, India} AND Source Niche = Human" is expressible.
+      // Any column header in the file — distinct values in the vibrio export:
+      // Country 144 | Continent 8 | Source Niche 10 | Source Type 24 |
+      // Collection Year 83 | Species 256 (empty for clostridium).
+      // Rows whose value is blank or "NaN" are KEPT as isolates but contribute
+      // to no segment and match no filter (see app.values.missingValues).
+      "keys": ["Country", "Continent", "Source Niche", "Source Type", "Collection Year"],
+
+      // Which of `keys` colours the bars initially. Must be one of `keys`.
+      "segmentBy": "Country",
+
+      // Which column joins an isolate row to a tree leaf. "ST" matches the
+      // numeric leaf labels in the .nwk files.
+      "joinColumn": "ST"
+    },
+
+    "api": {
+      "baseUrl": "http://localhost:8000/api",
+      "routes": {
+        "isolates": "/isolates?st={id}",
+        "differences": "/compare/{a}/{b}"
+      }
+    },
+
+    "values": {
+      // Comparison colouring only. The tree-difference metric is NOT in the
+      // isolate data (the export's own "Differences" column is entirely NaN),
+      // so the demo still SYNTHESIZES it — the one fabricated input left, kept
+      // purely to demonstrate the operator until the /compare route exists.
+      "diffThreshold": 0.5, // membership stand-in: clades below this count as different
+
+      // Values treated as "not recorded" in the category column. Such isolates
+      // are KEPT (parsed, counted, reported in the tooltip as "+N unrecorded")
+      // but form no segment and do not lengthen the bar — a stacked segment's
+      // width is its share of the bar, so counting them would silently inflate
+      // the countries that ARE known. A leaf whose isolates are all unrecorded
+      // gets no bar rather than a fabricated one.
+      "missingValues": ["", "NaN", "ND", "-"]
+    }
+
+    // Note: the library key `palette` (categorical colors) is omitted on purpose
+    // — it defaults to DEFAULT_PALETTE (16 colors), which is far too few for the
+    // 145 countries in the vibrio export. The app therefore GENERATES the palette
+    // at runtime with iwanthue(n) once it knows how many categories the data
+    // actually has, passes it as `palette`, and prime()s the scale with the full
+    // key set. Colors wrap modulo palette length, so too few colors would give
+    // two countries the same one.
+  }
+}
