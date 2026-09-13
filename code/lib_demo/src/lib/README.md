@@ -1158,11 +1158,11 @@ scale, the right panel reflected, and a stand-in backend composition provider.
 
 ## 17. Build & run
 
-The demo app lives at `<repo>/code/lib_demo/`; the datasets sit outside it at
-`<repo>/datasets/`. The npm manifest is the **repo-root** `package.json` (one
-`node_modules` for the whole repo), and its scripts point at this app's configs
-explicitly (`--config code/lib_demo/vite.config.ts`, `-p code/lib_demo/tsconfig.json`),
-so they work from anywhere in the repo:
+`<repo>/code/lib_demo/` is a **self-contained package** — its own
+`package.json`, lockfile and `node_modules` — so every command below is run from
+there, with no arguments. (See `RUNNING.md` beside it for the end-user guide.)
+The datasets are the one thing it does not own: they are shared repository data
+at `<repo>/datasets/`, reached via Vite's `publicDir: "../../datasets"`.
 - `npm start` — Vite dev server.
 - `npm run build` — production build (esbuild via Vite). Note this does **not**
   type-check: esbuild strips types without verifying them, so always gate on
@@ -1174,6 +1174,8 @@ so they work from anywhere in the repo:
 - `npm test` / `npm run test:watch` — Vitest. Tests live beside their subject as
   `*.test.ts`.
 - `npm run check` — typecheck + tests. **The gate to run before committing.**
+- `npm run preview` — serve a built `dist/` over HTTP (needed: `file://` breaks
+  ES modules and `fetch`).
 - The datasets live outside the app in `<repo>/datasets/` and are served at the site
   root via Vite `publicDir`: trees under `/gen_trees/*.nwk` (fetched + parsed with
   `parseNewick`) and isolate metadata under `/isolated_data/*.tsv` (tab-separated
@@ -1310,6 +1312,22 @@ the canvas.
 ## 19. Change log (implementation history)
 
 Keep brief, newest first. Record behavioural/API changes for thesis reference.
+
+- **`code/lib_demo/` is now a self-contained package** (§17; no library code
+  changed). Its `package.json` carries the real dependencies, its own lockfile and
+  `node_modules`; the repo-root `package.json`/`package-lock.json` are gone, as is
+  the stale `code/lib_demo/package-lock.json` left over from the folder move — it
+  listed 179 packages while its own manifest declared none, so anyone installing
+  from the wrong directory got a contradictory tree. Five dependencies inherited
+  from the original `clusters-dynamic` project were dropped after checking that
+  nothing imports them (`ol`, `@sigma/utils`, `graphology-communities-louvain`,
+  `monotone-chain-convex-hull`, `newick-js`): **124 packages → 76**, ~125 MB → ~100 MB,
+  with the suite still at 347 passing. What the package deliberately does *not*
+  own is the datasets: they stay shared repository data at `<repo>/datasets/`,
+  reached through `publicDir: "../../datasets"`, so the directory must remain
+  inside its repository. Adds `engines` (Vite 8 excludes Node 21.x and 22.0–22.11)
+  and an `npm run preview` script. `RUNNING.md` + `run.sh` live in the package;
+  the root keeps only a `README.md`, since hosts render only the root one.
 
 - **The viewer now watches its container's size** (§8). Sigma measures the
   container once at construction and binds only `window.resize` (v3.0.2 has no
