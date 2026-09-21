@@ -1,0 +1,39 @@
+{
+  "name": "triplet",
+  "title": "Triplet distance",
+  "version": "1",
+  "kind": "subprocess",
+  "command": ["${native}/TreeDiff/trip_sht", "${left}", "${right}"],
+  "input": {
+    "format": "newick",
+    "include_lengths": false
+  },
+  "timeout_s": 1800,
+  "parse": {
+    "scalars": [
+      {
+        "key": "triplet",
+        "pattern": "Triplets distance is:\\s*([0-9]+)",
+        "type": "int",
+        "required": true
+      }
+    ]
+  },
+  "description": "Number of leaf triples resolved differently by the two trees. Finer-grained than Robinson-Foulds, which judges a whole clade present or absent; a triple disagreement is a smaller unit than a clade, so this does not saturate on large clades the way RF does. Computed by TreeDiff (Branco, Vaz & Francisco 2024), run as a separate process.",
+  "capabilities": {
+    "per_clade": false,
+    "symmetric": true,
+    "weighted": false,
+    "requires_shared_leaf_set": true
+  },
+  "outputs": {
+    "summary": [
+      {
+        "key": "triplet",
+        "label": "Triplet distance",
+        "description": "Leaf triples on which the two trees disagree, out of C(n,3) possible."
+      }
+    ],
+    "columns": []
+  }
+}

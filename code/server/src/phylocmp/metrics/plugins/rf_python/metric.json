@@ -1,0 +1,31 @@
+{
+  "name": "rf",
+  "title": "Robinson-Foulds",
+  "version": "1",
+  "kind": "python",
+  "entrypoint": "phylocmp.metrics.plugins.rf_python.rf:compute",
+  "description": "Robinson-Foulds distance over clades. The per-clade similarity gradient is not part of this metric: it comes from the pair's shared correspondence, and this metric's exact-match verdict is derived from it.",
+  "capabilities": {
+    "per_clade": true,
+    "symmetric": true,
+    "weighted": false,
+    "requires_shared_leaf_set": true
+  },
+  "outputs": {
+    "summary": [
+      {"key": "rf", "label": "Robinson-Foulds distance",
+       "description": "Clades present in one tree but not the other, halved, as most implementations report it."},
+      {"key": "rf_normalised", "label": "Normalised RF",
+       "description": "RF as a fraction of the maximum for two trees of this size. 0 is identical, 0.5 shares nothing."},
+      {"key": "shared_clusters", "label": "Shared clades"},
+      {"key": "clusters_left", "label": "Clades in the left tree"},
+      {"key": "clusters_right", "label": "Clades in the right tree"},
+      {"key": "n_leaves", "label": "Leaves compared"}
+    ],
+    "columns": [
+      {"name": "exact", "dtype": "uint8", "semantics": "boolean",
+       "label": "Clade present identically", "render": "overlay",
+       "description": "Whether this clade appears in the other tree with exactly the same leaves. Binary by nature and saturating on large clades, so it suits a filter or overlay rather than a colour scale."}
+    ]
+  }
+}

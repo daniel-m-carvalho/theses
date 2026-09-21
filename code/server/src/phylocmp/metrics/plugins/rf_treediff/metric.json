@@ -1,0 +1,39 @@
+{
+  "name": "rf-treediff",
+  "title": "Robinson-Foulds (TreeDiff)",
+  "version": "1",
+  "kind": "subprocess",
+  "command": ["${native}/TreeDiff/rf_postorder", "${left}", "${right}"],
+  "input": {
+    "format": "newick",
+    "include_lengths": false
+  },
+  "timeout_s": 1800,
+  "parse": {
+    "scalars": [
+      {
+        "key": "rf",
+        "pattern": "Robinson Foulds distance is:\\s*([0-9.eE+-]+)",
+        "type": "float",
+        "required": true
+      }
+    ]
+  },
+  "description": "Robinson-Foulds computed by TreeDiff, the reference implementation of Branco, Vaz & Francisco (2024), run as a separate process over a succinct balanced-parentheses representation. Registered as an independent check on the built-in `rf` metric rather than for speed: it is a different algorithm over a different representation by different authors, and three of the five RF implementations examined for this project return wrong answers on real input. `rf_postorder` is chosen over `rf_nextsibling` because it uses an explicit stack; the latter recurses per tree level and these trees are 604 deep.",
+  "capabilities": {
+    "per_clade": false,
+    "symmetric": true,
+    "weighted": false,
+    "requires_shared_leaf_set": true
+  },
+  "outputs": {
+    "summary": [
+      {
+        "key": "rf",
+        "label": "Robinson-Foulds distance (TreeDiff)",
+        "description": "Should equal the built-in `rf` metric exactly. A disagreement means one of them is wrong."
+      }
+    ],
+    "columns": []
+  }
+}

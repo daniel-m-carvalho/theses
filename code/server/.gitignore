@@ -1,0 +1,11 @@
+# Generated artefacts: rebuildable from datasets/ with `phylocmp ingest-trees`.
+store/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+native/TreeDiff/
+native/sdsl/
+native/sdsl-lite/
+native/*.so
+native/src/*.o
