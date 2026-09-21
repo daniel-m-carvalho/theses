@@ -4,10 +4,14 @@ A side-by-side phylogenetic tree viewer: two trees of the same *Vibrio* isolates
 (UPGMA and Neighbour-Joining), with per-leaf isolate bar charts, metadata
 filtering, and tree-difference colouring.
 
-This directory is a self-contained package. The visualisation library is in
-`src/lib/`; everything around it (`src/main.ts`, `src/isolates.ts`,
-`src/legend.ts`) is the demo application that uses it. The library's own
-reference documentation is [`src/lib/README.md`](src/lib/README.md).
+This directory is the demo application. The visualisation library it uses is a
+separate package, **`phylo-tree-viewer`**, in [`../lib/`](../lib/) — imported by
+name, not by relative path. Everything here (`src/main.ts`, `src/isolates.ts`,
+`src/legend.ts`) is the application glue. The library's own reference
+documentation is [`../lib/README.md`](../lib/README.md).
+
+`../` is an npm **workspace root**, so you install once from there and both
+packages are set up together.
 
 ---
 
@@ -29,15 +33,15 @@ Nothing else has to be installed: no database, no Python, no build toolchain.
 
 ```bash
 git clone <repository-url>
-cd theses/code/lib_demo
-npm install      # once, ~20 seconds
-npm start
+cd theses/code           # the workspace root — install from here, not lib_demo
+npm install              # once, ~20 seconds; sets up both packages
+npm start                # runs the demo
 ```
 
 Then open the URL it prints — **http://localhost:5173/**.
 
-On macOS or Linux you can instead run `./run.sh`, which does the same three
-steps and checks your Node version first.
+On macOS or Linux you can instead run `lib_demo/run.sh` from anywhere, which does
+the same three steps and checks your Node version first.
 
 To stop the server: `Ctrl+C`.
 
@@ -103,8 +107,9 @@ Loading is near-instant; the two 9 MB isolate files are parsed in roughly 100 ms
 npm run check
 ```
 
-Type-checks the whole package and runs the test suite — **347 tests across 20
-files**, in about 4 seconds. Expect `Test Files 20 passed (20)`.
+Run from `code/` it type-checks and tests **both** packages — **347 tests**
+(306 in the library, 41 in the demo), in about 4 seconds. Run from either package
+directory it does just that one.
 
 That includes a test that reads all six real `.nwk` files end-to-end, so a pass
 also confirms the datasets are present and parse correctly.
@@ -146,25 +151,29 @@ theses/
 │   ├── gen_trees/             6 Newick trees (vibrio, clostridium, salmonella)
 │   └── isolated_data/         EnteroBase isolate exports, tab-separated
 └── code/lib_demo/             ← this package
-    ├── run.sh                 convenience launcher (macOS / Linux)
-    ├── package.json           the only manifest; install from here
-    ├── index.html             the page shell and its styling
-    └── src/
-        ├── main.ts            application glue: config, fetching, toolbars
-        ├── isolates.ts        isolate parsing, filtering, composition
-        ├── legend.ts          the footer legend
-        └── lib/               ← the library itself
-            ├── README.md         its reference documentation
-            ├── config.example.jsonc   every option, annotated with its allowed values
-            ├── presentation/     tree model, layout, viewer, operators
-            ├── config/           config-driven bootstrap
-            └── performance/      byte-budgeted LRU cache
+    ├── package.json           workspace root — install from here
+    ├── lib/                    ← the library, published as `phylo-tree-viewer`
+    │   ├── README.md              its reference documentation
+    │   └── src/
+    │       ├── index.ts           the public API barrel
+    │       ├── presentation/      tree model, layout, viewer, operators
+    │       ├── config/            config-driven bootstrap
+    │       └── performance/       byte-budgeted LRU cache
+    └── lib_demo/               ← this package, the demo application
+        ├── run.sh                 convenience launcher (macOS / Linux)
+        ├── index.html             the page shell and its styling
+        └── src/
+            ├── main.ts            application glue: config, fetching, toolbars
+            ├── isolates.ts        isolate parsing, filtering, composition
+            ├── legend.ts          the footer legend
+            └── config.example.jsonc   every option, annotated with its allowed values
 ```
 
-The split between `src/lib/` and the rest is deliberate and one-way: the library
-never fetches, never reads a config file, and never touches the page layout — the
+The split between the two packages is deliberate and one-way: the library never
+fetches, never reads a config file, and never touches the page layout — the
 application does all three and hands the library parsed trees plus data
-callbacks. `config.example.jsonc` doubles as the configuration schema, with every
+callbacks. Nothing in `lib/src/` imports anything outside it, which is what lets
+it be published on its own. `config.example.jsonc` doubles as the configuration schema, with every
 field's allowed values in a comment beside it.
 
 ---

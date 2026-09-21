@@ -5,9 +5,10 @@ import {
   type LeafDatum,
   type NewickNode,
   type ViewerHandle,
-} from "./lib";
+  DIFF_PALETTE,
+} from "phylo-tree-viewer";
 import iwanthue from "iwanthue";
-import rawConfigText from "./lib/config.example.jsonc?raw";
+import rawConfigText from "./config.example.jsonc?raw";
 import {
   composeLeaf,
   isFilterEmpty,
@@ -19,7 +20,6 @@ import {
   type ParseOptions,
 } from "./isolates";
 import { renderComparisonLegend, renderLegend } from "./legend";
-import { DIFF_PALETTE } from "./lib";
 
 /**
  * Entry point (application glue). Everything project-specific lives here:
@@ -101,13 +101,33 @@ interface AppConfig {
   values: { diffThreshold: number; missingValues?: string[] };
 }
 
+/**
+ * Phase timings for the benchmark harness, exposed on `window.__demoPhases`.
+ *
+ * The headline measurement is the library's work, not this app's: `fetch` is
+ * recorded separately and excluded from it, because in production the trees come
+ * from a backend API rather than a local file, so only `parse`/`layout`/`paint`
+ * transfer to the final frontend. Costs nothing when nobody reads it.
+ */
+const phases: Record<string, number> = {};
+(window as unknown as { __demoPhases: Record<string, number> }).__demoPhases = phases;
+
+async function timed<T>(name: string, fn: () => Promise<T> | T): Promise<T> {
+  const t0 = performance.now();
+  const result = await fn();
+  phases[name] = (phases[name] ?? 0) + (performance.now() - t0);
+  return result;
+}
+
 /** App-side loader: fetch a tree file from the site root and parse via the lib. */
 async function loadTree(path: string): Promise<NewickNode> {
-  const text = await fetch(path).then((r) => {
-    if (!r.ok) throw new Error(`Failed to load tree "${path}" (${r.status})`);
-    return r.text();
-  });
-  return parseNewick(text);
+  const text = await timed("fetch", () =>
+    fetch(path).then((r) => {
+      if (!r.ok) throw new Error(`Failed to load tree "${path}" (${r.status})`);
+      return r.text();
+    })
+  );
+  return timed("parse", () => parseNewick(text));
 }
 
 // --- Isolate metadata (real data; model + parsing live in ./isolates) ---
@@ -385,9 +405,44 @@ async function main(): Promise<void> {
 
   // App owns fetching: resolve each panel's tree file from the app config, then
   // fetch + parse it. The library gets already-parsed trees via `providers`.
+  //
+  // `?left=…&right=…` overrides the configured tree files. This exists for the
+  // benchmark harness, which must point the SAME build at many different tree
+  // sizes; without it every measurement would need a rebuilt config. It changes
+  // only which file is fetched — not how anything renders — so the build under
+  // measurement is the build that ships.
   const panelIds = (config.panels ?? []).map((p) => p.id!);
   const treeCfgs = panelIds.map((id) => appConfig.sources.trees[id]);
-  const trees = await Promise.all(treeCfgs.map((t) => loadTree(t.file)));
+  const override = new URLSearchParams(location.search);
+  const overrides = [override.get("left"), override.get("right")];
+  const treeFiles = treeCfgs.map((t, i) => overrides[i] ?? t.file);
+  const trees = await Promise.all(treeFiles.map((f) => loadTree(f)));
+
+  // `?maxNodes=N` (or `unlimited`) overrides the per-panel leaf budget.
+  // The benchmark sweeps this because the demo and phylo.io otherwise draw very
+  // different amounts: at the shipped budget the demo renders a summary while
+  // phylo.io renders far more, so a single comparison point would be measuring
+  // two different pictures. Sweeping it gives one like-for-like setting
+  // ("unlimited") plus a curve showing what summarisation actually buys.
+  const budget = override.get("maxNodes");
+  if (budget) {
+    const value = budget === "unlimited" ? Number.MAX_SAFE_INTEGER : Number(budget);
+    if (Number.isFinite(value) && value > 0) {
+      for (const panel of config.panels ?? []) {
+        panel.viewer = { ...panel.viewer, maxNodes: value };
+      }
+    }
+  }
+
+  // Signal for the benchmark: resolved once the first frame after render has
+  // painted, so time-to-first-render is measured against pixels, not a load event.
+  const markPainted = (layoutEnd: number) =>
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        phases.paint = performance.now() - layoutEnd;
+        (window as unknown as { __demoPainted?: boolean }).__demoPainted = true;
+      })
+    );
 
   // Isolate metadata, fetched ONCE per distinct species even when several panels
   // share it (the two vibrio panels here fetch ~9 MB once, not twice).
@@ -396,7 +451,15 @@ async function main(): Promise<void> {
   const missing = new Set(appConfig.values.missingValues ?? ["", "NaN"]);
   const parseOpts: ParseOptions = { joinColumn, keys, missing };
   const files = new Map(appConfig.sources.isolated_data.map((d) => [d.species, d.file]));
-  const wanted = [...new Set(treeCfgs.map((t) => t.species).filter((s): s is string => !!s))];
+  // `?isolates=0` skips the isolate metadata entirely. The benchmark's headline
+  // comparison is tree rendering, and phylo.io has no equivalent of the bar
+  // charts or the metadata filter — measuring a ~9 MB TSV fetch against a tool
+  // that never makes it would understate this build. The cost of the isolate
+  // features is measured separately, with the flag on.
+  const withIsolates = override.get("isolates") !== "0";
+  const wanted = withIsolates
+    ? [...new Set(treeCfgs.map((t) => t.species).filter((s): s is string => !!s))]
+    : [];
   const indices = new Map<string, IsolateIndex>(
     await Promise.all(
       wanted.map(async (species) => {
@@ -493,6 +556,7 @@ async function main(): Promise<void> {
 
   const threshold = appConfig.values.diffThreshold;
 
+  const layoutStart = performance.now();
   const comparison = createFromConfig(containers, { ...config, palette }, {
     trees,
     dataOf: (id, leaf) => stateOf(id, leaf).datum,
@@ -609,6 +673,19 @@ async function main(): Promise<void> {
     onFilterChange: applyFilter,
   }, paintComparisonLegend);
   comparison.panels.forEach((panel, i) => buildPanelControls(controlHosts[i], panel));
+
+  phases.layout = performance.now() - layoutStart;
+
+  // Benchmark readout: how much of the tree actually reached the renderer.
+  // `graphNodes` is the honest measure of what was drawn — the leaf budget is a
+  // request, and `prepareTree` may return fewer. Reporting both is what keeps a
+  // maxNodes sweep interpretable.
+  (window as unknown as { __demoStats: unknown }).__demoStats = {
+    maxNodes: config.panels?.[0]?.viewer?.maxNodes ?? null,
+    graphNodes: comparison.panels.map((p) => p.viewer.getGraph()?.order ?? 0),
+  };
+
+  markPainted(performance.now());
 
   const totalRows = [...indices.values()].reduce((s, ix) => s + ix.rows, 0);
   console.info(

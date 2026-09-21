@@ -20,7 +20,7 @@ import type { NewickNode } from "./types";
  * hardcoded numbers.
  */
 
-const DATASET = path.resolve(__dirname, "../../../../../../datasets/gen_trees");
+const DATASET = path.resolve(__dirname, "../../../../../datasets/gen_trees");
 
 /**
  * Hierarchical trees — the representations the library actually supports.

@@ -11,7 +11,7 @@ metadata filtering, and tree-difference colouring.
 ## Try it
 
 ```bash
-cd code/lib_demo
+cd code
 npm install
 npm start
 ```
@@ -26,10 +26,11 @@ troubleshooting.
 
 | Path | |
 |---|---|
-| `code/lib_demo/` | the demo application — a self-contained package, and where you install from |
-| `code/lib_demo/src/lib/` | the library |
-| `code/lib_demo/src/lib/README.md` | its reference documentation |
+| `code/` | npm workspace root — **install from here** |
+| `code/lib/` | the library, published as `phylo-tree-viewer` |
+| `code/lib/README.md` | its reference documentation |
+| `code/lib_demo/` | the demo application that consumes it |
 | `datasets/` | Newick trees and EnteroBase isolate exports, shared by the repository and served by the demo |
 
-`npm run check` — from `code/lib_demo/` — type-checks and runs the test suite
-(347 tests).
+`npm run check` — from `code/` — type-checks and runs the test suite in both
+packages (347 tests: 306 library, 41 demo).

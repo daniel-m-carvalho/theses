@@ -1,0 +1,58 @@
+{
+  "name": "phylo-tree-viewer",
+  "version": "0.1.0",
+  "description": "Side-by-side phylogenetic tree visualisation for the browser: a Sigma.js/graphology viewer with composable operators for expand/collapse, selection, per-leaf bar charts and tree comparison.",
+  "keywords": [
+    "phylogenetics",
+    "phylogenetic-tree",
+    "newick",
+    "visualization",
+    "tree-comparison",
+    "sigma",
+    "graphology",
+    "dendrogram"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "//": "Entry points resolve to TypeScript source. That is deliberate while this is consumed only through a workspace: Vite compiles linked sources directly, so there is no build step to keep in sync. Publishing to npm requires switching these to built ESM + .d.ts — see the publishing task in the plan.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "files": [
+    "src",
+    "!src/**/*.test.ts",
+    "!src/test_support",
+    "!src/presentation/operators/harness.ts",
+    "README.md"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "npm run typecheck && npm run test"
+  },
+  "//peerDependencies": "sigma and graphology are peers, not dependencies: the library's public API hands back its Sigma renderer and graphology Graph (TreeViewer.getRenderer/getGraph), so the consumer must share one instance. Two copies in a bundle would produce objects that are not interchangeable.",
+  "peerDependencies": {
+    "graphology": "^0.26.0",
+    "sigma": "^3.0.3"
+  },
+  "dependencies": {
+    "newick": "^3.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.5",
+    "graphology": "^0.26.0",
+    "jsdom": "^29.1.1",
+    "sigma": "^3.0.3",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}

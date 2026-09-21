@@ -2,7 +2,7 @@
   "name": "lib-demo",
   "version": "0.1.0",
   "private": true,
-  "description": "Side-by-side phylogenetic tree viewer: a browser visualisation library (src/lib) and the demo application that uses it.",
+  "description": "Demo application for phylo-tree-viewer: two Vibrio trees side by side with isolate bar charts, metadata filtering and difference colouring.",
   "license": "MIT",
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
@@ -16,10 +16,11 @@
     "test:watch": "vitest",
     "check": "npm run typecheck && npm run test"
   },
+  "//dependencies": "sigma and graphology are listed here because phylo-tree-viewer declares them as peerDependencies — the consumer supplies them, so one shared instance reaches the library. iwanthue is the demo's own (runtime palette generation).",
   "dependencies": {
     "graphology": "^0.26.0",
     "iwanthue": "^2.1.0",
-    "newick": "^3.0.1",
+    "phylo-tree-viewer": "*",
     "sigma": "^3.0.3"
   },
   "devDependencies": {

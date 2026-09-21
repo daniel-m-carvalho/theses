@@ -10,9 +10,10 @@
 
 set -euo pipefail
 
-# Run from the package directory regardless of where the script was invoked
-# from, so `./code/lib_demo/run.sh` from the repo root works too.
-cd "$(dirname "${BASH_SOURCE[0]}")"
+# Run from the npm WORKSPACE ROOT (code/), regardless of where the script was
+# invoked from. Installing from the demo directory alone would not link the
+# sibling library package, so this must be the parent of lib_demo.
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 red()  { printf '\033[31m%s\033[0m\n' "$*"; }
 bold() { printf '\033[1m%s\033[0m\n' "$*"; }
@@ -48,7 +49,7 @@ fi
 
 # --- 2. Dependencies -------------------------------------------------------
 if [ ! -d node_modules ]; then
-  bold "Installing dependencies (one-off, ~30s)…"
+  bold "Installing dependencies for both workspace packages (one-off, ~30s)…"
   # A cache directory owned by root — usually left behind by an earlier
   # `sudo npm install` — makes npm fail with EEXIST/EACCES. Retrying against a
   # scratch cache sidesteps it without needing a password.

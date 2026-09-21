@@ -31,11 +31,13 @@ the library project-agnostic and is the key boundary that makes it reusable.
 
 ## 2. Design principles
 
-- **Library vs application boundary.** Everything under `src/lib/` is reusable
-  and backend-agnostic. The demo application (`src/main.ts`) is the only
-  project-specific glue: it fetches dataset files, builds panels, wires the
-  toolbar, and supplies isolate data. The dependency arrow points one way:
-  `app → lib`. No lib module imports the app.
+- **Library vs application boundary.** This is a standalone npm package
+  (`phylo-tree-viewer`); everything in it is reusable and backend-agnostic. The
+  demo application (`../lib_demo/`) is the only project-specific glue: it fetches
+  dataset files, builds panels, wires the toolbar, and supplies isolate data. The
+  dependency arrow points one way: `app → lib`. No library module imports the app
+  — verified: nothing under `src/` imports anything outside it, which is what
+  makes this package publishable.
 - **Data in, not fetch.** The library accepts data (trees, isolate counts,
   colors) through constructor options and setters. It never fetches.
 - **Composable operators.** Each interaction is an independent operator in its
@@ -58,7 +60,7 @@ the library project-agnostic and is the key boundary that makes it reusable.
 ## 3. Architecture & module map
 
 ```
-src/lib/
+phylo-tree-viewer/src/
   index.ts                  Public API barrel — the only import surface consumers use.
   presentation/             Everything that renders or reacts to a tree.
     tree/
@@ -109,10 +111,10 @@ operators/viewer depend on the tree/color/data layers, never the reverse.
 
 ```mermaid
 flowchart TD
-  APP["Application — src/main.ts<br/>fetch · panels · toolbar · backend data"]
+  APP["Application — lib_demo/src/main.ts<br/>fetch · panels · toolbar · backend data"]
   IDX["index.ts — public API barrel"]
 
-  subgraph LIB["Library — src/lib"]
+  subgraph LIB["Library — phylo-tree-viewer"]
     direction TB
     TV["viewer/ TreeViewer + Emitter"]
     OPS["operators/<br/>ExpandCollapse (+SubtreeNavigator) ·<br/>CladeShape · Selection · BarChart · Comparison"]
@@ -1150,19 +1152,28 @@ scale, the right panel reflected, and a stand-in backend composition provider.
   layout would need a generalized presenter.
 - **Join key** for leaf data is fixed to `category ?? name` (configurable key
   planned).
-- **Not yet a standalone package.** It is a self-contained `lib/` folder inside
-  the demo app, with `sigma`/`graphology`/`newick` as shared dependencies. The
-  one-way `app → lib` boundary means it can be lifted out wholesale.
+- **Published to npm? Not yet — but it is now a real package.** `phylo-tree-viewer`
+  is its own workspace package with its own manifest, and the demo consumes it by
+  name rather than by relative path. What remains before `npm publish` is a build
+  step: `main`/`types`/`exports` currently point at **TypeScript source**, which
+  works because Vite compiles linked workspace sources directly, but a published
+  tarball must ship built ESM plus `.d.ts`. See §17.
 
 ---
 
 ## 17. Build & run
 
-`<repo>/code/lib_demo/` is a **self-contained package** — its own
-`package.json`, lockfile and `node_modules` — so every command below is run from
-there, with no arguments. (See `RUNNING.md` beside it for the end-user guide.)
-The datasets are the one thing it does not own: they are shared repository data
-at `<repo>/datasets/`, reached via Vite's `publicDir: "../../datasets"`.
+`<repo>/code/` is an **npm workspace root** holding two packages: `lib/`
+(`phylo-tree-viewer`, this library) and `lib_demo/` (the demo that consumes it).
+Install once from `<repo>/code/` — a single `node_modules` and lockfile serve
+both, and npm symlinks `phylo-tree-viewer` into place, so edits to the library
+are picked up by the demo immediately with no build or publish step.
+(See `lib_demo/RUNNING.md` for the end-user guide.)
+
+Run commands from `<repo>/code/` to hit both packages (`npm run check` runs the
+gate in each), or from either package directory to hit just that one. The
+datasets are shared repository data at `<repo>/datasets/`, reached by the demo's
+Vite `publicDir: "../../datasets"`.
 - `npm start` — Vite dev server.
 - `npm run build` — production build (esbuild via Vite). Note this does **not**
   type-check: esbuild strips types without verifying them, so always gate on
@@ -1312,6 +1323,25 @@ the canvas.
 ## 19. Change log (implementation history)
 
 Keep brief, newest first. Record behavioural/API changes for thesis reference.
+
+- **Split into a real npm package** (§2, §16, §17; no behavioural change). The library
+  moved from `lib_demo/src/lib/` to its own workspace package `code/lib/`, published
+  under the name **`phylo-tree-viewer`**, and the demo now imports it by package name
+  instead of a relative path. `code/` became an npm workspace root, so one install and
+  one lockfile serve both packages and npm symlinks the library into place — edits are
+  still picked up instantly, with no build or publish step, because `main`/`types`/
+  `exports` point at TypeScript source and Vite compiles linked sources directly.
+  Decisions worth recording: (a) **`sigma` and `graphology` are `peerDependencies`**,
+  not dependencies — the public API hands back the Sigma renderer and graphology Graph
+  (`getRenderer`/`getGraph`), so two copies in one bundle would yield objects that are
+  not interchangeable; the consumer supplies one shared instance. `newick` stays a
+  normal dependency (internal, never exposed). (b) `iwanthue` turned out to be
+  **app-only** and left the library's manifest entirely. (c) `config.example.jsonc`
+  moved to the demo: it carries the demo's own dataset paths and `app` block, and a
+  library should not ship its consumer's configuration — a library-only example is a
+  publish-time task. (d) The test suite split with the code: 306 library tests, 41
+  demo tests, 347 total — unchanged. The `<dialog>` shim went to the demo (the legend
+  needs it); the WebGL and `ResizeObserver` shims stayed with the viewer.
 
 - **`code/lib_demo/` is now a self-contained package** (§17; no library code
   changed). Its `package.json` carries the real dependencies, its own lockfile and

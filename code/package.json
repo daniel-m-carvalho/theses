@@ -1,0 +1,21 @@
+{
+  "name": "theses-code",
+  "private": true,
+  "description": "Workspace root: the phylo-tree-viewer library and the demo application that consumes it.",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "workspaces": [
+    "lib",
+    "lib_demo",
+    "bench"
+  ],
+  "scripts": {
+    "start": "npm start --workspace lib_demo",
+    "build": "npm run build --workspace lib_demo",
+    "preview": "npm run preview --workspace lib_demo",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm test --workspaces --if-present",
+    "check": "npm run check --workspaces --if-present"
+  }
+}

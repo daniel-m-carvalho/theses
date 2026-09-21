@@ -19,7 +19,7 @@ import type { NewickNode } from "./types";
  * Run `npx vitest run layout.bench` and read the table.
  */
 
-const DATASET = path.resolve(__dirname, "../../../../../../datasets/gen_trees");
+const DATASET = path.resolve(__dirname, "../../../../../datasets/gen_trees");
 
 function loadTree(file: string): NewickNode {
   return parseNewick(readFileSync(path.join(DATASET, file), "utf8"));
