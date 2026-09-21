@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>phylo.io — benchmark harness</title>
+    <style>
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; font-family: system-ui, sans-serif; }
+      #panels { display: flex; height: 100vh; }
+      #left, #right { flex: 1 1 0; border-right: 1px solid #ddd; overflow: hidden; }
+    </style>
+    <!-- Order matters: the two worker chunks must load before the main bundle
+         (documented in phylo-io's README "Quick Start"). -->
+    <script src="/phyloio/dist/src_worker_bcn_js.phylo.js"></script>
+    <script src="/phyloio/dist/src_worker_distance_js.phylo.js"></script>
+    <script src="/phyloio/dist/phylo.js"></script>
+  </head>
+  <body>
+    <div id="panels"><div id="left"></div><div id="right"></div></div>
+
+    <script>
+      // Driven by the benchmark, never by hand. `window.__bench` is the contract
+      // the Playwright driver calls; it resolves once phylo.io has painted, so
+      // time-to-first-render is measured against real pixels, not a load event.
+      window.__bench = {
+        // Phase split mirroring the demo's, so the two are comparable:
+        //   fetch  — excluded from the headline (production fetches from an API)
+        //   parse  — add_tree(), which parses the Newick
+        //   layout — start(), which builds and draws
+        //   paint  — until the browser has actually put pixels up
+        //
+        // The sub-phases are tool-specific by nature; the honest comparable
+        // figure is `postFetch` — everything after the bytes arrive.
+        async load(leftUrl, rightUrl) {
+          const t0 = performance.now();
+          const [a, b] = await Promise.all([
+            fetch(leftUrl).then((r) => r.text()),
+            fetch(rightUrl).then((r) => r.text()),
+          ]);
+          const fetched = performance.now();
+
+          const phylo = PhyloIO.init();
+          const c1 = phylo.create_container("left");
+          const c2 = phylo.create_container("right");
+          phylo.settings.compareMode = true;
+          phylo.bound_container = [c1, c2];
+          c1.add_tree(a);
+          c2.add_tree(b);
+          const parsed = performance.now();
+
+          phylo.start();
+          const laidOut = performance.now();
+
+          // Two animation frames: the first lets phylo.io's rendering run, the
+          // second fires only after the browser has painted it.
+          await new Promise((res) =>
+            requestAnimationFrame(() => requestAnimationFrame(res))
+          );
+          const painted = performance.now();
+
+          return {
+            fetch: fetched - t0,
+            parse: parsed - fetched,
+            layout: laidOut - parsed,
+            paint: painted - laidOut,
+            postFetch: painted - fetched,
+            total: painted - t0,
+          };
+        },
+      };
+      window.__benchReady = true;
+    </script>
+  </body>
+</html>
