@@ -46,16 +46,34 @@ py::tuple best_matches_py(
     py::array_t<int64_t, py::array::c_style | py::array::forcecast> target_hi,
     py::array_t<int64_t, py::array::c_style | py::array::forcecast> target_size,
     py::array_t<float, py::array::c_style | py::array::forcecast> seed_similarity,
-    py::array_t<uint32_t, py::array::c_style | py::array::forcecast> seed_corresponds) {
+    py::array_t<uint32_t, py::array::c_style | py::array::forcecast> seed_corresponds,
+    unsigned threads) {
 
     const size_t n_source = static_cast<size_t>(source_size.size());
     const size_t n_target = static_cast<size_t>(target_size.size());
 
-    BestMatches result = best_matches(
-        source_leaf_positions.data(), source_leaf_start.data(), source_size.data(),
-        source_is_leaf.data(), lca.data(), n_source,
-        target_lo.data(), target_hi.data(), target_size.data(), n_target,
-        seed_similarity.data(), seed_corresponds.data());
+    // Pointers are taken while the GIL is still held; the arrays are kept alive
+    // by the arguments themselves for the duration of the call.
+    const int64_t* slp = source_leaf_positions.data();
+    const int64_t* sls = source_leaf_start.data();
+    const int64_t* ss = source_size.data();
+    const uint8_t* sil = source_is_leaf.data();
+    const int64_t* lc = lca.data();
+    const int64_t* tlo = target_lo.data();
+    const int64_t* thi = target_hi.data();
+    const int64_t* ts = target_size.data();
+    const float* seed_s = seed_similarity.data();
+    const uint32_t* seed_c = seed_corresponds.data();
+
+    BestMatches result;
+    {
+        // Without releasing the GIL the worker threads would serialise on it
+        // and the pool would be slower than the single-threaded loop. Nothing
+        // inside touches a Python object.
+        py::gil_scoped_release unlocked;
+        result = best_matches(slp, sls, ss, sil, lc, n_source,
+                              tlo, thi, ts, n_target, seed_s, seed_c, threads);
+    }
 
     return py::make_tuple(to_array(result.similarity), to_array(result.corresponds));
 }
@@ -76,9 +94,12 @@ PYBIND11_MODULE(phylocmp_native, m) {
           py::arg("source_size"), py::arg("source_is_leaf"), py::arg("lca"),
           py::arg("target_lo"), py::arg("target_hi"), py::arg("target_size"),
           py::arg("seed_similarity"), py::arg("seed_corresponds"),
+          py::arg("threads") = 0,
           "Best corresponding clade by maximum Jaccard overlap. Exact: the "
           "size-window pruning excludes only candidates that provably cannot "
-          "win, so the result matches an exhaustive scan.");
+          "win, so the result matches an exhaustive scan. Parallel across "
+          "source clades; threads=0 uses one per hardware thread. The result "
+          "does not depend on the thread count.");
 
     py::class_<BpTree>(m, "BpTree")
         .def(py::init<const std::string&>())

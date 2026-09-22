@@ -191,6 +191,7 @@ def _best_matches(
     similarity = np.ascontiguousarray(similarity, dtype=np.float32)
     corresponds = np.ascontiguousarray(corresponds, dtype=np.uint32)
 
+    from .. import config
     from . import native
 
     extension = native.extension()
@@ -209,6 +210,7 @@ def _best_matches(
             target_size=np.ascontiguousarray(t_size, dtype=np.int64),
             seed_similarity=similarity,
             seed_corresponds=corresponds,
+            threads=config.threads(),
         )
 
     similarity = similarity.copy()

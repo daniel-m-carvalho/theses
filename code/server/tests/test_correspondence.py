@@ -234,3 +234,76 @@ def test_the_search_is_exact_not_heuristic(monkeypatch):
             len(a & b) / len(a | b) for b in right_clades
         )
         assert got.left.similarity[i] == pytest.approx(best, abs=1e-6), i
+
+
+# --- threading -------------------------------------------------------------
+
+def at_threads(monkeypatch, count: int, left, right):
+    """Compute correspondence pinned to a thread count."""
+    from phylocmp import config
+
+    monkeypatch.setattr(config, "threads", lambda: count)
+    return compute_correspondence(left, right)
+
+
+@pytest.mark.parametrize("threads", [1, 2, 3, 8, 16])
+def test_the_result_does_not_depend_on_the_thread_count(monkeypatch, threads):
+    """The gate for parallelising the search.
+
+    Not 'equally good' — bit-identical. Index i's answer depends on no other
+    index and ties break within a single iteration, so this should hold; but
+    reasoning about determinism instead of testing it is how race conditions
+    get shipped.
+    """
+    from phylocmp.trees import native
+
+    if not native.available():
+        pytest.skip("native extension not built")
+
+    left = parse_newick("((((A,B),(C,D)),((E,F),(G,H))),(((I,J),(K,L)),((M,N),(O,P))));")
+    right = parse_newick("((A,(B,(C,E))),(((D,F),(G,H)),((I,K),((J,L),((M,O),(N,P))))));")
+
+    one = at_threads(monkeypatch, 1, left, right)
+    many = at_threads(monkeypatch, threads, left, right)
+    for side in ("left", "right"):
+        np.testing.assert_array_equal(
+            getattr(one, side).similarity, getattr(many, side).similarity
+        )
+        np.testing.assert_array_equal(
+            getattr(one, side).corresponds, getattr(many, side).corresponds
+        )
+
+
+def test_threading_is_deterministic_on_the_real_pair(real_store, monkeypatch):
+    from phylocmp.trees import native
+    from phylocmp.trees.store import read_tree
+
+    if not native.available():
+        pytest.skip("native extension not built")
+
+    left, right, _ = reconcile(
+        read_tree(real_store / "trees" / "vibrio-nj").to_arrays(),
+        read_tree(real_store / "trees" / "vibrio-upgma").to_arrays(),
+    )
+    one = at_threads(monkeypatch, 1, left, right)
+    many = at_threads(monkeypatch, 0, left, right)  # 0 = one per core
+    for side in ("left", "right"):
+        np.testing.assert_array_equal(
+            getattr(one, side).similarity, getattr(many, side).similarity
+        )
+        np.testing.assert_array_equal(
+            getattr(one, side).corresponds, getattr(many, side).corresponds
+        )
+
+
+def test_thread_count_is_configurable(monkeypatch):
+    from phylocmp import config
+
+    monkeypatch.setenv("PHYLOCMP_THREADS", "3")
+    assert config.threads() == 3
+    monkeypatch.setenv("PHYLOCMP_THREADS", "")
+    assert config.threads() == 0, "empty means auto"
+    monkeypatch.setenv("PHYLOCMP_THREADS", "nonsense")
+    assert config.threads() == 0, "unparseable must not crash a batch"
+    monkeypatch.setenv("PHYLOCMP_THREADS", "-4")
+    assert config.threads() == 0

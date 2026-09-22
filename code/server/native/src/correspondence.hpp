@@ -27,6 +27,25 @@
 // merely look unlikely, so the result is identical to scanning every clade —
 // which is what the equivalence test against the Python implementation checks.
 //
+// Threading
+// ---------
+// Each source clade's search is independent: it reads shared read-only data,
+// keeps its own scratch buffer, and writes exactly two output slots no other
+// iteration touches. Threads therefore need no synchronisation beyond handing
+// out work.
+//
+// Work is handed out **dynamically**, in small chunks from an atomic counter,
+// rather than by splitting the range into equal blocks. Clade cost varies by
+// three orders of magnitude — a 2-leaf clade is trivial, an 8,441-leaf one is
+// not — so equal blocks would leave most threads idle behind whichever drew the
+// large clades. The chunk is large enough to amortise the atomic and small
+// enough to balance.
+//
+// The result does not depend on the thread count: index i's answer depends on
+// no other index, and ties break on lowest node id within a single iteration.
+// That is asserted rather than assumed — reasoning about determinism is how
+// race conditions get shipped.
+//
 // Ties are broken by lowest node index, matching numpy's argmax. Several
 // clades scoring equally is common (1,148 nodes on the vibrio pair), and
 // without a rule the two implementations return different-but-equally-good
@@ -36,7 +55,9 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
+#include <thread>
 #include <vector>
 
 namespace phylocmp {
@@ -58,7 +79,8 @@ inline BestMatches best_matches(
     const int64_t* target_size,
     size_t n_target,
     const float* seed_similarity,          // the LCA ratio, already computed
-    const uint32_t* seed_corresponds) {
+    const uint32_t* seed_corresponds,
+    unsigned threads = 0) {                // 0 = one per hardware thread
 
     BestMatches out;
     out.similarity.assign(seed_similarity, seed_similarity + n_source);
@@ -73,9 +95,25 @@ inline BestMatches best_matches(
     std::vector<int64_t> sizes(n_target);
     for (size_t k = 0; k < n_target; ++k) sizes[k] = target_size[by_size[k]];
 
-    std::vector<int64_t> taxa;
+    // Grain: big enough that the atomic is not the bottleneck on cheap clades,
+    // small enough that one thread cannot monopolise a run of expensive ones.
+    constexpr size_t CHUNK = 64;
 
-    for (size_t i = 0; i < n_source; ++i) {
+    if (threads == 0) threads = std::thread::hardware_concurrency();
+    if (threads == 0) threads = 1;
+    threads = static_cast<unsigned>(
+        std::min<size_t>(threads, std::max<size_t>(1, n_source / CHUNK + 1)));
+
+    std::atomic<size_t> next_chunk{0};
+
+    auto worker = [&]() {
+      std::vector<int64_t> taxa;  // per thread; shared would be a data race
+      while (true) {
+        const size_t start = next_chunk.fetch_add(CHUNK, std::memory_order_relaxed);
+        if (start >= n_source) break;
+        const size_t stop = std::min(start + CHUNK, n_source);
+
+        for (size_t i = start; i < stop; ++i) {
         if (source_is_leaf[i]) continue;
 
         const int64_t a = source_size[i];
@@ -157,6 +195,17 @@ inline BestMatches best_matches(
 
         out.similarity[i] = static_cast<float>(best);
         out.corresponds[i] = best_node;
+        }
+      }
+    };
+
+    if (threads == 1) {
+        worker();
+    } else {
+        std::vector<std::thread> pool;
+        pool.reserve(threads);
+        for (unsigned t = 0; t < threads; ++t) pool.emplace_back(worker);
+        for (auto& thread : pool) thread.join();
     }
     return out;
 }

@@ -47,3 +47,19 @@ SCRATCH_DIR = STORE_DIR / "scratch"
 NATIVE_DIR = _dir_from_env(
     "PHYLOCMP_NATIVE", Path(__file__).resolve().parents[2] / "native"
 )
+
+
+def threads() -> int:
+    """How many threads the native search may use. 0 means one per core.
+
+    Overridable because a shared machine should not have its whole CPU taken by
+    an offline batch, and because the tests pin it to compare thread counts —
+    the result must not depend on this value.
+    """
+    raw = os.environ.get("PHYLOCMP_THREADS")
+    if not raw:
+        return 0
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return 0

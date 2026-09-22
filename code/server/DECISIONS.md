@@ -1694,6 +1694,106 @@ as a metric is running a program, which is what the subprocess kind exists for.
 
 The parts that were worth making native were the parts that were slow. RF never was.
 
+## 17. Scaling, measured — and the search parallelised
+
+*Code: `native/src/correspondence.hpp`, `native/src/module.cpp`, `config.threads()`.*
+
+### 17.1 Where a comparison's time actually goes
+
+Measured on pairs built by nesting relabelled copies of the real vibrio trees, so the shape stays
+deep and unbalanced rather than randomly balanced — which matters, because the pruning bound
+(§15.1) depends on shape:
+
+| leaves | nodes | parse | reconcile | **correspondence** | rf |
+|---|---|---|---|---|---|
+| 17,645 | 35,289 | 0.04 s | 0.12 s | **0.92 s** | 0.07 s |
+| 35,290 | 70,579 | 0.08 s | 0.24 s | **3.39 s** | 0.12 s |
+| 70,580 | 141,159 | 0.16 s | 0.47 s | **12.92 s** | 0.24 s |
+| 141,160 | 282,319 | 0.32 s | 0.95 s | **51.88 s** | 0.48 s |
+| 282,320 | 564,639 | — | — | **207 s** (568 MB) | — |
+
+**Correspondence is O(n²) and is essentially all of it.** Four doublings confirm the shape: twice
+the leaves, ~3.8x the time. Everything else is linear and together under 2% at 282k leaves.
+
+**The native port (§15) bought a constant, not a shape.** 13x faster, still quadratic. Worth
+stating plainly because it is the intuitive mistake: a language change cannot fix an algorithm.
+
+### 17.2 Robinson-Foulds does not need any of it
+
+| nodes | RF via Day's interval test | correspondence |
+|---|---|---|
+| 35,289 | 0.07 s | 0.92 s |
+| 141,159 | 0.24 s | 12.92 s |
+| 564,639 | **0.95 s** | **207 s** |
+
+RF is O(n) and scales flat. What costs is the **gradient** — "how much of this clade survives and
+where did it go" — which RF has no need of and the frontend colours with. `rf.py` already carries
+Day's test as a cross-check (§3.2), so a distances-only mode would be nearly free.
+
+**Decided against** (user, 2026-09-22): one code path is worth more than the saving. No pair is
+ever half-computed, and the API never has to represent one.
+
+### 17.3 Parallelised: 5.5x, and bit-identical
+
+Each source clade's search is independent — shared read-only inputs, its own scratch buffer, two
+output slots nobody else touches.
+
+| leaves | nodes | before | after | |
+|---|---|---|---|---|
+| 17,645 | 35,289 | 0.92 s | 0.28 s | 3.2x |
+| 70,580 | 141,159 | 12.92 s | 2.34 s | 5.5x |
+| 141,160 | 282,319 | 51.88 s | 9.06 s | 5.7x |
+| 282,320 | 564,639 | **207 s** | **37.97 s** | **5.5x** |
+
+On 10 cores, 4 of them performance. The gain is 3.2x at small sizes and 5.5x at large: at 35k nodes
+the single-threaded Python preparation around the search is 15% of the total, and by 565k nodes it
+is 2%. Amdahl's law, visible in a table.
+
+Two things the implementation turns on:
+
+* **Dynamic scheduling.** Clade cost varies by three orders of magnitude — a 2-leaf clade against
+  an 8,441-leaf one — so threads pull 64-index chunks from an atomic counter rather than taking
+  equal blocks, which would leave most of them idle behind whoever drew the large clades.
+* **Releasing the GIL.** Without it the workers serialise on it and the pool is *slower* than the
+  single-threaded loop.
+
+**The gate is determinism, and it is tested rather than argued.** The same pair at 1, 2, 3, 8 and 16
+threads is bit-identical in both `similarity` and `corresponds`, on constructed trees and on the
+real pair. It should be — index *i* depends on no other index and ties break within one iteration —
+but reasoning about determinism instead of testing it is how race conditions ship.
+
+### 17.4 Other languages were weighed for this, not just other schedulers
+
+`best_matches` touches no sdsl: nine plain arrays in, two out, run once per pair offline. Unlike the
+succinct store it has no commitment to C++ and could even be a subprocess.
+
+* **Virtual threads (Loom) and coroutines (Kotlin)** solve *blocking*, not computation. A parked
+  task releases its carrier thread; this loop never parks — no I/O, no locks, nothing to yield on.
+  They would be pinned to a carrier pool sized to the core count, giving the same parallelism plus
+  overhead. **CPU-bound work is capped by physical cores in every language.**
+* **Rust with `rayon`** was the strongest alternative: work-stealing handles the clade-size
+  imbalance better than hand-rolled chunking, and memory safety rules out the class of bug in §14.3.
+* **Java/Kotlin as a subprocess** is viable — JVM startup and serialising a few MB are noise against
+  200 s.
+
+**C++ was kept because it already existed and was already verified** bit-identical to the Python
+reference and to an independent exhaustive scan. A rewrite re-opens that verification for a
+constant-factor gain threading already delivers, and none of the alternatives changes O(n²).
+
+Java and Kotlin remain usable for **metrics**, which the subprocess contract accepts in any language
+— GTP, a geodesic implementation, is Java and would need no code at all.
+
+### 17.5 Where this leaves the ceiling
+
+At 565k nodes a pair is **38 s**; extrapolating the quadratic, 1M nodes is ~2 min and 2M ~8 min.
+Comfortable for offline work.
+
+Two caveats worth carrying: the pruning weakens on **dissimilar** trees (1.3x rather than 13x,
+§15.2), so a badly-matched large pair costs several times these figures; and parallelism is a
+constant factor, so it buys roughly **one doubling** of tree size and no more. Beyond that the
+remaining lever is the algorithm — bottom-up overlap accumulation with small-to-large merging —
+which is recorded as deferred, not dismissed.
+
 ---
 
 ## Findings carried forward
