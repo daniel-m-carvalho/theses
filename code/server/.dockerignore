@@ -1,0 +1,11 @@
+# Rebuildable or environment-specific; never belongs in an image.
+.venv/
+store/
+native/sdsl-lite/
+native/TreeDiff/
+native/sdsl/
+native/*.so
+__pycache__/
+*.pyc
+.pytest_cache/
+tests/

@@ -1,0 +1,53 @@
+services:
+  phylodelta-service:
+    image: phylodelta-service:local
+    build:
+      context: ./code/server
+    restart: unless-stopped
+    ports:
+      # Published so the API can be used directly — curl, /docs, another
+      # client — without going through the demo's proxy.
+      - "${PHYLODELTA_PORT:-8001}:8000"
+    environment:
+      PHYLODELTA_STORE: /data/store
+      PHYLODELTA_DATASETS: /data/datasets
+      # 0 means one thread per core for the correspondence search. Set a
+      # number on a shared machine, where taking every core is unneighbourly.
+      PHYLODELTA_THREADS: "0"
+    volumes:
+      # The store is derived and rebuildable, but recomputing it costs minutes
+      # to hours, so it is kept rather than discarded with the container.
+      - phylodelta-data:/data/store
+      # Source data, read-only: the container ingests it and never writes it.
+      - ./datasets:/data/datasets:ro
+    healthcheck:
+      # Checks that the service answers, not that the store is populated — a
+      # fresh volume is empty until `build-all` has run, and the container must
+      # still come up so that job can be run against it.
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import json, urllib.request; response=urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3); raise SystemExit(0 if json.load(response).get('status') == 'ok' else 1)",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  phylodelta-demo:
+    build:
+      # The workspace root, not the demo directory: the demo consumes the
+      # library as a workspace package and npm cannot resolve it otherwise.
+      context: ./code
+      dockerfile: lib_demo/Dockerfile
+    ports:
+      - "${PHYLODELTA_DEMO_PORT:-3001}:80"
+    restart: unless-stopped
+    depends_on:
+      phylodelta-service:
+        condition: service_healthy
+
+volumes:
+  phylodelta-data:
