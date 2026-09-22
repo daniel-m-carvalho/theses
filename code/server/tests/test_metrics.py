@@ -10,11 +10,11 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from phylocmp.metrics import registry
-from phylocmp.metrics.plugins.rf_python.rf import compute
-from phylocmp.trees.correspondence import compute_correspondence
-from phylocmp.trees.newick import parse_newick
-from phylocmp.trees.reconcile import reconcile
+from phylodelta.metrics import registry
+from phylodelta.metrics.plugins.rf_python.rf import compute
+from phylodelta.trees.correspondence import compute_correspondence
+from phylodelta.trees.newick import parse_newick
+from phylodelta.trees.reconcile import reconcile
 
 #: Milestone 2's gate, from the reference implementation (DECISIONS.md §2.6).
 VIBRIO_RF = 6825
@@ -102,7 +102,7 @@ def test_unknown_metric_raises():
 
 @pytest.fixture(scope="session")
 def vibrio_pair(real_store):
-    from phylocmp.trees.store import read_tree
+    from phylodelta.trees.store import read_tree
 
     left = read_tree(real_store / "trees" / "vibrio-nj").to_arrays()
     right = read_tree(real_store / "trees" / "vibrio-upgma").to_arrays()
@@ -125,7 +125,7 @@ def test_rf_matches_the_reference_implementation(vibrio_pair):
 
 def test_self_comparison_of_a_real_tree_is_zero(real_store):
     """The control that caught two defects in other implementations (§2.3, §2.5)."""
-    from phylocmp.trees.store import read_tree
+    from phylodelta.trees.store import read_tree
 
     arrays = read_tree(real_store / "trees" / "vibrio-nj").to_arrays()
     r = rf(arrays, arrays, best_match=False)
@@ -135,7 +135,7 @@ def test_self_comparison_of_a_real_tree_is_zero(real_store):
 
 def test_cross_species_comparison_runs_and_reports_what_it_matched(real_store):
     """Comparing different species is allowed; the result carries its own caveat."""
-    from phylocmp.trees.store import read_tree
+    from phylodelta.trees.store import read_tree
 
     left = read_tree(real_store / "trees" / "clostridium-upgma").to_arrays()
     right = read_tree(real_store / "trees" / "vibrio-upgma").to_arrays()

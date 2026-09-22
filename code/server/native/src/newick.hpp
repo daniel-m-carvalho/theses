@@ -20,7 +20,7 @@
 #include <string>
 #include <vector>
 
-namespace phylocmp {
+namespace phylodelta {
 
 constexpr uint32_t NO_PARENT = 0xFFFFFFFFu;
 
@@ -190,4 +190,4 @@ inline ParsedTree parse_newick(const std::string& text) {
     return tree;
 }
 
-}  // namespace phylocmp
+}  // namespace phylodelta

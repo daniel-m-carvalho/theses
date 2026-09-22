@@ -31,8 +31,8 @@ PAIR = "mini-nj__mini-upgma"
 @pytest.fixture(scope="module")
 def built(tmp_path_factory):
     """Run all three offline stages, exactly as the CLI does."""
-    from phylocmp.isolates.ingest import ingest_all
-    from phylocmp.precompute.pipeline import compute_pairs, ingest_trees
+    from phylodelta.isolates.ingest import ingest_all
+    from phylodelta.precompute.pipeline import compute_pairs, ingest_trees
 
     store = tmp_path_factory.mktemp("mini")
     assert ingest_trees(datasets_dir=FIXTURES, store_dir=store) == 0
@@ -43,11 +43,11 @@ def built(tmp_path_factory):
 
 @pytest.fixture()
 def client(built, monkeypatch):
-    from phylocmp import config
-    from phylocmp.api.app import create_app
-    from phylocmp.isolates import registry as isolate_registry
-    from phylocmp.metrics import registry_pairs
-    from phylocmp.trees import registry as tree_registry
+    from phylodelta import config
+    from phylodelta.api.app import create_app
+    from phylodelta.isolates import registry as isolate_registry
+    from phylodelta.metrics import registry_pairs
+    from phylodelta.trees import registry as tree_registry
 
     monkeypatch.setattr(config, "STORE_DIR", built)
     monkeypatch.setattr(config, "TREES_DIR", built / "trees")
@@ -84,9 +84,9 @@ def test_mismatched_leaf_sets_are_reconciled_and_reported(client):
 
 
 def test_a_tree_compared_with_itself_would_score_zero(built):
-    from phylocmp.metrics.plugins.rf_python.rf import compute
-    from phylocmp.trees.correspondence import compute_correspondence
-    from phylocmp.trees.store import read_tree
+    from phylodelta.metrics.plugins.rf_python.rf import compute
+    from phylodelta.trees.correspondence import compute_correspondence
+    from phylodelta.trees.store import read_tree
 
     arrays = read_tree(built / "trees" / "mini-upgma").to_arrays()
     correspondence = compute_correspondence(arrays, arrays, best_match=False)

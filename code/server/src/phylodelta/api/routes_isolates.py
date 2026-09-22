@@ -41,7 +41,7 @@ def _reader(species: str):
             f"No isolate store for {species!r}.",
             f"Available: {', '.join(available)}."
             if available
-            else "Run `phylocmp ingest-isolates`.",
+            else "Run `phylodelta ingest-isolates`.",
         ) from None
 
 

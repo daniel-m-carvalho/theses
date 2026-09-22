@@ -3,7 +3,7 @@
   "title": "Robinson-Foulds",
   "version": "1",
   "kind": "python",
-  "entrypoint": "phylocmp.metrics.plugins.rf_python.rf:compute",
+  "entrypoint": "phylodelta.metrics.plugins.rf_python.rf:compute",
   "description": "Robinson-Foulds distance over clades. The per-clade similarity gradient is not part of this metric: it comes from the pair's shared correspondence, and this metric's exact-match verdict is derived from it.",
   "capabilities": {
     "per_clade": true,

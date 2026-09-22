@@ -37,11 +37,11 @@ def documented_paths() -> list[str]:
 
 @pytest.fixture(scope="module")
 def client(): 
-    from phylocmp import config
-    from phylocmp.api.app import create_app
+    from phylodelta import config
+    from phylodelta.api.app import create_app
 
     if not (config.TREES_DIR / "vibrio-upgma" / "meta.json").exists():
-        pytest.skip("the real store is not built; run `phylocmp build-all`")
+        pytest.skip("the real store is not built; run `phylodelta build-all`")
     return TestClient(create_app())
 
 

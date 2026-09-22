@@ -1,4 +1,4 @@
-# Generated artefacts: rebuildable from datasets/ with `phylocmp ingest-trees`.
+# Generated artefacts: rebuildable from datasets/ with `phylodelta ingest-trees`.
 store/
 .venv/
 __pycache__/

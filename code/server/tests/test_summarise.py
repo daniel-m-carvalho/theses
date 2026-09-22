@@ -10,9 +10,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from phylocmp.trees.newick import parse_newick
-from phylocmp.trees.store import TreeMeta, read_tree, write_tree
-from phylocmp.trees.summarise import Summariser, count_leaves, flatten
+from phylodelta.trees.newick import parse_newick
+from phylodelta.trees.store import TreeMeta, read_tree, write_tree
+from phylodelta.trees.summarise import Summariser, count_leaves, flatten
 
 
 def make(tmp_path, newick: str) -> Summariser:

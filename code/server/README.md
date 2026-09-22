@@ -1,4 +1,4 @@
-# phylocmp — backend for dynamic tree comparison
+# PhyloDelta — backend for dynamic tree comparison
 
 Serves **slices** of large phylogenetic trees, the comparison values that go with them, and isolate
 metadata for the leaves currently on screen.
@@ -24,8 +24,8 @@ What that buys, measured on the real data:
 
 ```sh
 uv sync                        # create .venv, install deps (Python 3.12)
-uv run phylocmp build-all      # datasets/ -> store/  (a few minutes, once)
-uv run uvicorn phylocmp.api.app:app --reload
+uv run phylodelta build-all      # datasets/ -> store/  (a few minutes, once)
+uv run uvicorn phylodelta.api.app:app --reload
 ```
 
 ### The native extension is optional
@@ -42,10 +42,10 @@ Then <http://127.0.0.1:8000/docs> for the generated OpenAPI contract.
 
 | command | reads | writes | cost |
 |---|---|---|---|
-| `phylocmp ingest-trees` | `datasets/gen_trees/*.nwk` | `store/trees/` | ~130 ms per tree |
-| `phylocmp compute-pairs` | `store/trees/` | `store/pairs/` | ~13 s per pair |
-| `phylocmp ingest-isolates` | `datasets/isolated_data/*.tsv` | `store/isolates/` | ~5 s per species |
-| `phylocmp list-metrics` | — | — | — |
+| `phylodelta ingest-trees` | `datasets/gen_trees/*.nwk` | `store/trees/` | ~130 ms per tree |
+| `phylodelta compute-pairs` | `store/trees/` | `store/pairs/` | ~13 s per pair |
+| `phylodelta ingest-isolates` | `datasets/isolated_data/*.tsv` | `store/isolates/` | ~5 s per species |
+| `phylodelta list-metrics` | — | — | — |
 
 `store/` is generated and gitignored; it is always rebuildable from `datasets/`.
 
@@ -247,11 +247,11 @@ shape with `code: "invalid_request"` and an `errors` array naming each bad field
 
 | path | what |
 |---|---|
-| `src/phylocmp/trees/` | Newick parsing, canonicalisation, the columnar store, slicing |
-| `src/phylocmp/metrics/` | Metric contract and registry; `plugins/rf_python/` is Robinson-Foulds |
-| `src/phylocmp/isolates/` | Isolate ingest and filtered composition queries |
-| `src/phylocmp/api/v1/` | FastAPI routes; `schemas.py` is the wire contract |
-| `src/phylocmp/precompute/` | The offline CLI |
+| `src/phylodelta/trees/` | Newick parsing, canonicalisation, the columnar store, slicing |
+| `src/phylodelta/metrics/` | Metric contract and registry; `plugins/rf_python/` is Robinson-Foulds |
+| `src/phylodelta/isolates/` | Isolate ingest and filtered composition queries |
+| `src/phylodelta/api/v1/` | FastAPI routes; `schemas.py` is the wire contract |
+| `src/phylodelta/precompute/` | The offline CLI |
 | `native/` | The optional C++ extension (`build.sh`), and `build_treediff.sh` for the conformance oracle |
 | `tests/fixtures/` | A 6 KB dataset so the suite runs without the real 20 MB |
 
@@ -280,12 +280,12 @@ until then.
 Several metrics in one run share the expensive work:
 
 ```sh
-uv run phylocmp compute-pairs --metric rf --metric triplet
+uv run phylodelta compute-pairs --metric rf --metric triplet
 ```
 
 ## Adding a metric
 
-A metric is a directory under `src/phylocmp/metrics/plugins/` with a `metric.json` manifest and an
+A metric is a directory under `src/phylodelta/metrics/plugins/` with a `metric.json` manifest and an
 implementation. Two invocation kinds are defined: `python` (imported in-process) and `subprocess`
 (trees in, results out, as JSON on stdio) — the second so a metric can be written in **any**
 language. Every metric returns the same shape, so neither the API nor the frontend knows which

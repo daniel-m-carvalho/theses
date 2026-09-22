@@ -12,7 +12,7 @@ import json
 import numpy as np
 import pytest
 
-from phylocmp.metrics.contract import (
+from phylodelta.metrics.contract import (
     ColumnSpec,
     MetricManifest,
     MetricOutputs,
@@ -128,10 +128,10 @@ def test_declaring_nothing_but_producing_something_is_caught():
 # --- the shipped manifest --------------------------------------------------
 
 def test_rf_declares_what_it_produces(real_store):
-    from phylocmp.metrics import registry
-    from phylocmp.metrics.plugins.rf_python.rf import compute
-    from phylocmp.trees.correspondence import compute_correspondence
-    from phylocmp.trees.newick import parse_newick
+    from phylodelta.metrics import registry
+    from phylodelta.metrics.plugins.rf_python.rf import compute
+    from phylodelta.trees.correspondence import compute_correspondence
+    from phylodelta.trees.newick import parse_newick
 
     a = parse_newick("(((A,B),C),(D,E));")
     b = parse_newick("((D,E),(B,(A,C)));")
@@ -140,7 +140,7 @@ def test_rf_declares_what_it_produces(real_store):
 
 
 def test_every_shipped_manifest_parses():
-    from phylocmp.metrics import registry
+    from phylodelta.metrics import registry
 
     for name, m in registry.discover().items():
         assert m.name == name

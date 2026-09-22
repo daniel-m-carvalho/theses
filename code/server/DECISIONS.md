@@ -1826,7 +1826,7 @@ architecture writing offers a diagram.
 ### 18.2 The store holds no system of record, which is what makes this cheap
 
 **Confirmed with the user (2026-09-22): there is no update path after precompute.** Everything in
-`store/` is derived from `datasets/` and reconstructed by `phylocmp build-all`. It is a **cache, not
+`store/` is derived from `datasets/` and reconstructed by `phylodelta build-all`. It is a **cache, not
 a database**.
 
 Owning your persistence normally means owning backup, migration and durability. Here:

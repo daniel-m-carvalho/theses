@@ -11,16 +11,16 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from phylocmp.trees import native
-from phylocmp.trees.newick import NO_PARENT, parse_newick
-from phylocmp.trees.store import TreeMeta, read_tree, store_bytes, write_tree
-from phylocmp.trees.succinct_store import (
+from phylodelta.trees import native
+from phylodelta.trees.newick import NO_PARENT, parse_newick
+from phylodelta.trees.store import TreeMeta, read_tree, store_bytes, write_tree
+from phylodelta.trees.succinct_store import (
     NativeRequired,
     read_succinct_tree,
     to_balanced_parens,
     write_succinct_tree,
 )
-from phylocmp.trees.summarise import Summariser, flatten
+from phylodelta.trees.summarise import Summariser, flatten
 
 pytestmark = pytest.mark.skipif(
     not native.available(),
@@ -160,7 +160,7 @@ def test_format_version_mismatch_is_refused(tmp_path):
 
 def test_it_says_so_when_the_extension_is_missing(tmp_path, monkeypatch):
     """The columnar store needs no compiler; this one does, and must say so."""
-    from phylocmp.trees import succinct_store
+    from phylodelta.trees import succinct_store
 
     monkeypatch.setattr(succinct_store, "extension", lambda: None)
     with pytest.raises(NativeRequired, match="native/build.sh"):

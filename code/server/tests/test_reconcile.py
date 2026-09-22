@@ -5,9 +5,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from phylocmp.trees.newick import parse_newick
-from phylocmp.trees.normalise import assert_rooted_binary
-from phylocmp.trees.reconcile import leaf_labels, reconcile, restrict_to_leaves
+from phylodelta.trees.newick import parse_newick
+from phylodelta.trees.normalise import assert_rooted_binary
+from phylodelta.trees.reconcile import leaf_labels, reconcile, restrict_to_leaves
 
 
 def test_identical_leaf_sets_are_left_alone():

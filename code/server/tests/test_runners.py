@@ -11,17 +11,17 @@ from pathlib import Path
 
 import pytest
 
-from phylocmp.metrics import registry
-from phylocmp.metrics.contract import MetricManifest
-from phylocmp.metrics.runners import (
+from phylodelta.metrics import registry
+from phylodelta.metrics.contract import MetricManifest
+from phylodelta.metrics.runners import (
     MetricFailed,
     PreparedPair,
     is_available,
     make_runner,
 )
-from phylocmp.trees.correspondence import compute_correspondence
-from phylocmp.trees.materialise import MaterialisedPair
-from phylocmp.trees.newick import parse_newick
+from phylodelta.trees.correspondence import compute_correspondence
+from phylodelta.trees.materialise import MaterialisedPair
+from phylodelta.trees.newick import parse_newick
 
 PLUGINS = Path(registry.PLUGINS_DIR)
 

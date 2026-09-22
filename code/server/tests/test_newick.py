@@ -7,7 +7,7 @@ import math
 import numpy as np
 import pytest
 
-from phylocmp.trees.newick import NO_PARENT, parse_newick
+from phylodelta.trees.newick import NO_PARENT, parse_newick
 
 
 def test_single_leaf():
@@ -118,7 +118,7 @@ def test_parse_newick_fast_falls_back_when_the_extension_is_absent(monkeypatch):
     This is the configuration a machine with no compiler runs, so it is tested
     whether or not the extension happens to be built here.
     """
-    from phylocmp.trees import native, newick
+    from phylodelta.trees import native, newick
 
     monkeypatch.setattr(native, "extension", lambda: None)
     got = newick.parse_newick_fast("((A,B),(C,D));")
@@ -127,7 +127,7 @@ def test_parse_newick_fast_falls_back_when_the_extension_is_absent(monkeypatch):
 
 
 def test_describe_reports_which_parser_is_in_use(monkeypatch):
-    from phylocmp.trees import native
+    from phylodelta.trees import native
 
     monkeypatch.setattr(native, "extension", lambda: None)
     assert native.describe() == "python"

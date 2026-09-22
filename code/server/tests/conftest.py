@@ -23,7 +23,7 @@ def real_store(tmp_path_factory, datasets_dir: Path) -> Path:
     exercise the same path the precompute CLI takes, and so a parser change
     cannot pass against a stale fixture.
     """
-    from phylocmp.precompute.pipeline import ingest_trees
+    from phylodelta.precompute.pipeline import ingest_trees
 
     store = tmp_path_factory.mktemp("store")
     assert ingest_trees(datasets_dir=datasets_dir, store_dir=store) == 0

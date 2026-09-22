@@ -15,7 +15,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SERVER="$(dirname "$HERE")"
 
 if [ "${1:-}" = "clean" ]; then
-  rm -f "$HERE"/phylocmp_native*.so
+  rm -f "$HERE"/phylodelta_native*.so
   echo "removed the built extension"
   exit 0
 fi
@@ -41,12 +41,12 @@ clang++ -O3 -Wall -std=c++17 -shared -undefined dynamic_lookup -fPIC \
   -I"$PYTHON_INCLUDE" \
   -I"$HERE/sdsl-lite/include" \
   "$HERE/src/module.cpp" \
-  -o "$HERE/phylocmp_native${EXT_SUFFIX}"
+  -o "$HERE/phylodelta_native${EXT_SUFFIX}"
 
-echo "built $HERE/phylocmp_native${EXT_SUFFIX}"
+echo "built $HERE/phylodelta_native${EXT_SUFFIX}"
 cd "$SERVER" && uv run python -c "
 import sys; sys.path.insert(0, 'native')
-import phylocmp_native as nat
+import phylodelta_native as nat
 t = nat.BpTree('((()())(()()))')
 print(f'  self-check: {t.size()} nodes, root has {t.num_leaves(0)} leaves')
 "

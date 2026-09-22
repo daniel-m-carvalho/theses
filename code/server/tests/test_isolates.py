@@ -15,14 +15,14 @@ from pathlib import Path
 
 import pytest
 
-from phylocmp.isolates.query import (
+from phylodelta.isolates.query import (
     UnknownFacet,
     UnknownValue,
     compositions,
     value_counts,
 )
-from phylocmp.isolates.schema import is_facet, is_identifier, slug
-from phylocmp.isolates.store import read_isolates
+from phylodelta.isolates.schema import is_facet, is_identifier, slug
+from phylodelta.isolates.store import read_isolates
 
 csv.field_size_limit(10**7)
 DATASETS = Path(__file__).resolve().parents[3] / "datasets"
@@ -30,7 +30,7 @@ DATASETS = Path(__file__).resolve().parents[3] / "datasets"
 
 @pytest.fixture(scope="module")
 def isolate_store(tmp_path_factory):
-    from phylocmp.isolates.ingest import ingest_all
+    from phylodelta.isolates.ingest import ingest_all
 
     if not DATASETS.is_dir():
         pytest.skip("datasets not present")
@@ -255,9 +255,9 @@ def test_store_is_much_smaller_than_the_tsv(isolate_store):
 def client(isolate_store, monkeypatch):
     from fastapi.testclient import TestClient
 
-    from phylocmp import config
-    from phylocmp.api.app import create_app
-    from phylocmp.isolates import registry
+    from phylodelta import config
+    from phylodelta.api.app import create_app
+    from phylodelta.isolates import registry
 
     monkeypatch.setattr(config, "ISOLATES_DIR", isolate_store)
     registry.reset_cache()

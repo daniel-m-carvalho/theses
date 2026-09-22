@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-# .../code/server/src/phylocmp/config.py -> .../repo/theses
+# .../code/server/src/phylodelta/config.py -> .../repo/theses
 _REPO_ROOT = Path(__file__).resolve().parents[3].parent
 
 
@@ -20,10 +20,10 @@ def _dir_from_env(var: str, default: Path) -> Path:
 
 
 #: Read-only source data: the Newick trees and the isolate TSVs.
-DATASETS_DIR = _dir_from_env("PHYLOCMP_DATASETS", _REPO_ROOT / "datasets")
+DATASETS_DIR = _dir_from_env("PHYLODELTA_DATASETS", _REPO_ROOT / "datasets")
 
 #: Generated artefacts. Rebuildable from DATASETS_DIR, so it is gitignored.
-STORE_DIR = _dir_from_env("PHYLOCMP_STORE", Path(__file__).resolve().parents[2] / "store")
+STORE_DIR = _dir_from_env("PHYLODELTA_STORE", Path(__file__).resolve().parents[2] / "store")
 
 TREES_DIR = STORE_DIR / "trees"
 PAIRS_DIR = STORE_DIR / "pairs"
@@ -45,7 +45,7 @@ SCRATCH_DIR = STORE_DIR / "scratch"
 #: the repository; what they produce is not, so this is gitignored and
 #: rebuildable (see native/build_treediff.sh).
 NATIVE_DIR = _dir_from_env(
-    "PHYLOCMP_NATIVE", Path(__file__).resolve().parents[2] / "native"
+    "PHYLODELTA_NATIVE", Path(__file__).resolve().parents[2] / "native"
 )
 
 
@@ -56,7 +56,7 @@ def threads() -> int:
     an offline batch, and because the tests pin it to compare thread counts —
     the result must not depend on this value.
     """
-    raw = os.environ.get("PHYLOCMP_THREADS")
+    raw = os.environ.get("PHYLODELTA_THREADS")
     if not raw:
         return 0
     try:

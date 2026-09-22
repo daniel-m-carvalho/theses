@@ -60,7 +60,7 @@
 #include <thread>
 #include <vector>
 
-namespace phylocmp {
+namespace phylodelta {
 
 struct BestMatches {
     std::vector<float> similarity;
@@ -210,4 +210,4 @@ inline BestMatches best_matches(
     return out;
 }
 
-}  // namespace phylocmp
+}  // namespace phylodelta

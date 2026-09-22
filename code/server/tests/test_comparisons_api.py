@@ -19,7 +19,7 @@ def computed_store(tmp_path_factory):
     """A store with trees ingested and the vibrio pair computed."""
     from pathlib import Path
 
-    from phylocmp.precompute.pipeline import compute_pairs, ingest_trees
+    from phylodelta.precompute.pipeline import compute_pairs, ingest_trees
 
     datasets = Path(__file__).resolve().parents[3] / "datasets"
     if not datasets.is_dir():
@@ -32,10 +32,10 @@ def computed_store(tmp_path_factory):
 
 @pytest.fixture()
 def client(computed_store, monkeypatch):
-    from phylocmp import config
-    from phylocmp.api.app import create_app
-    from phylocmp.metrics import registry_pairs
-    from phylocmp.trees import registry
+    from phylodelta import config
+    from phylodelta.api.app import create_app
+    from phylodelta.metrics import registry_pairs
+    from phylodelta.trees import registry
 
     monkeypatch.setattr(config, "STORE_DIR", computed_store)
     monkeypatch.setattr(config, "TREES_DIR", computed_store / "trees")
@@ -296,10 +296,10 @@ def test_a_scalar_only_metric_is_served_with_the_full_gradient(client, computed_
     pair's correspondence, not from the metric, so the only thing missing is
     that metric's own overlay.
     """
-    from phylocmp.metrics.contract import MetricResult
-    from phylocmp.metrics.registry_pairs import reset_cache
-    from phylocmp.metrics.store import write_pair
-    from phylocmp.trees.store import read_tree
+    from phylodelta.metrics.contract import MetricResult
+    from phylodelta.metrics.registry_pairs import reset_cache
+    from phylodelta.metrics.store import write_pair
+    from phylodelta.trees.store import read_tree
 
     left = read_tree(computed_store / "trees" / "vibrio-nj").to_arrays()
     right = read_tree(computed_store / "trees" / "vibrio-upgma").to_arrays()
@@ -331,10 +331,10 @@ def test_a_scalar_only_metric_is_served_with_the_full_gradient(client, computed_
 
 def test_difference_ordering_works_for_a_scalar_only_metric(client, computed_store):
     """order=difference ranks by correspondence, so it does not need the metric."""
-    from phylocmp.metrics.contract import MetricResult
-    from phylocmp.metrics.registry_pairs import reset_cache
-    from phylocmp.metrics.store import write_pair
-    from phylocmp.trees.store import read_tree
+    from phylodelta.metrics.contract import MetricResult
+    from phylodelta.metrics.registry_pairs import reset_cache
+    from phylodelta.metrics.store import write_pair
+    from phylodelta.trees.store import read_tree
 
     left = read_tree(computed_store / "trees" / "vibrio-nj").to_arrays()
     right = read_tree(computed_store / "trees" / "vibrio-upgma").to_arrays()

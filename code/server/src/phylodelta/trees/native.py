@@ -22,7 +22,7 @@ _lock = threading.Lock()
 _loaded: ModuleType | None = None
 _attempted = False
 
-MODULE_NAME = "phylocmp_native"
+MODULE_NAME = "phylodelta_native"
 
 
 def extension() -> ModuleType | None:

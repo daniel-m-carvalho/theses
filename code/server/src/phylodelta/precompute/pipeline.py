@@ -5,10 +5,10 @@ trade of this backend: the thesis measures what the *browser* spends, so work is
 moved off the request path wherever it can be moved at all. This CLI is allowed
 to take hours.
 
-    uv run phylocmp ingest-trees        # Newick -> store/trees/
-    uv run phylocmp compute-pairs       # comparisons -> store/pairs/
-    uv run phylocmp ingest-isolates     # isolate TSVs -> store/isolates/
-    uv run phylocmp build-all           # all three, in order
+    uv run phylodelta ingest-trees        # Newick -> store/trees/
+    uv run phylodelta compute-pairs       # comparisons -> store/pairs/
+    uv run phylodelta ingest-isolates     # isolate TSVs -> store/isolates/
+    uv run phylodelta build-all           # all three, in order
 """
 
 from __future__ import annotations
@@ -103,7 +103,7 @@ def compute_pairs(
     store = Path(store_dir or config.STORE_DIR)
     trees_dir = store / "trees"
     if not trees_dir.is_dir():
-        print("no tree store; run `phylocmp ingest-trees` first", file=sys.stderr)
+        print("no tree store; run `phylodelta ingest-trees` first", file=sys.stderr)
         return 1
 
     wanted = list(metrics or ([metric_name] if metric_name else ["rf"]))
@@ -250,7 +250,7 @@ def build_all() -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="phylocmp", description=__doc__)
+    parser = argparse.ArgumentParser(prog="phylodelta", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("ingest-trees", help="parse datasets/gen_trees/*.nwk into the columnar store")
 

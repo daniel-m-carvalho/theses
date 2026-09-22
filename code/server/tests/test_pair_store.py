@@ -12,18 +12,18 @@ import json
 import numpy as np
 import pytest
 
-from phylocmp.metrics.contract import MetricResult, MetricSide
-from phylocmp.metrics.plugins.rf_python.rf import compute
-from phylocmp.metrics.project import project, project_correspondence
-from phylocmp.metrics.store import (
+from phylodelta.metrics.contract import MetricResult, MetricSide
+from phylodelta.metrics.plugins.rf_python.rf import compute
+from phylodelta.metrics.project import project, project_correspondence
+from phylodelta.metrics.store import (
     read_correspondence,
     read_pair,
     write_correspondence,
     write_pair,
 )
-from phylocmp.trees.correspondence import NO_CORRESPONDENCE, compute_correspondence
-from phylocmp.trees.newick import parse_newick
-from phylocmp.trees.reconcile import reconcile
+from phylodelta.trees.correspondence import NO_CORRESPONDENCE, compute_correspondence
+from phylodelta.trees.newick import parse_newick
+from phylodelta.trees.reconcile import reconcile
 
 
 def prepared(a, b):
@@ -221,7 +221,7 @@ def test_unknown_column_names_what_is_there(tmp_path):
 
 def test_real_pair_end_to_end(real_store, tmp_path):
     """The full pipeline on real data, with the alignment assertion that matters."""
-    from phylocmp.trees.store import read_tree
+    from phylodelta.trees.store import read_tree
 
     left = read_tree(real_store / "trees" / "vibrio-nj").to_arrays()
     right = read_tree(real_store / "trees" / "vibrio-upgma").to_arrays()

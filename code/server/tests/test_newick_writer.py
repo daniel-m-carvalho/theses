@@ -11,9 +11,9 @@ import math
 import numpy as np
 import pytest
 
-from phylocmp.trees.materialise import MaterialisedPair
-from phylocmp.trees.newick import parse_newick
-from phylocmp.trees.newick_writer import to_newick, write_newick
+from phylodelta.trees.materialise import MaterialisedPair
+from phylodelta.trees.newick import parse_newick
+from phylodelta.trees.newick_writer import to_newick, write_newick
 
 
 def assert_round_trips(text: str) -> None:
@@ -91,7 +91,7 @@ def test_deep_tree_does_not_recurse():
 
 
 def test_empty_tree_is_refused():
-    from phylocmp.trees.newick import TreeArrays
+    from phylodelta.trees.newick import TreeArrays
 
     empty = TreeArrays(
         parent=np.array([], dtype=np.uint32),
@@ -107,7 +107,7 @@ def test_empty_tree_is_refused():
 
 @pytest.mark.parametrize("tree_id", ["vibrio-upgma", "vibrio-nj", "clostridium-upgma"])
 def test_real_trees_round_trip(real_store, tree_id):
-    from phylocmp.trees.store import read_tree
+    from phylodelta.trees.store import read_tree
 
     arrays = read_tree(real_store / "trees" / tree_id).to_arrays()
     back = parse_newick(to_newick(arrays))

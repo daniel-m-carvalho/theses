@@ -7,9 +7,9 @@ import json
 import numpy as np
 import pytest
 
-from phylocmp.trees.newick import parse_newick, parse_newick_file
-from phylocmp.trees.normalise import assert_rooted_binary, suppress_unary
-from phylocmp.trees.store import COLUMNS, TreeMeta, read_tree, store_bytes, write_tree
+from phylodelta.trees.newick import parse_newick, parse_newick_file
+from phylodelta.trees.normalise import assert_rooted_binary, suppress_unary
+from phylodelta.trees.store import COLUMNS, TreeMeta, read_tree, store_bytes, write_tree
 
 #: The gate for milestone 1: leaf counts of the real trees, cross-checked
 #: against an independent regex count of the source files.

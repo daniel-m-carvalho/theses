@@ -17,13 +17,13 @@ from __future__ import annotations
 
 import pytest
 
-from phylocmp.metrics import registry
-from phylocmp.metrics.plugins.rf_python.rf import compute
-from phylocmp.metrics.runners import PreparedPair, is_available
-from phylocmp.trees.correspondence import compute_correspondence
-from phylocmp.trees.materialise import MaterialisedPair
-from phylocmp.trees.newick import parse_newick
-from phylocmp.trees.reconcile import reconcile
+from phylodelta.metrics import registry
+from phylodelta.metrics.plugins.rf_python.rf import compute
+from phylodelta.metrics.runners import PreparedPair, is_available
+from phylodelta.trees.correspondence import compute_correspondence
+from phylodelta.trees.materialise import MaterialisedPair
+from phylodelta.trees.newick import parse_newick
+from phylodelta.trees.reconcile import reconcile
 
 METRIC = "rf-treediff"
 
@@ -73,7 +73,7 @@ def test_the_two_implementations_agree(tmp_path, left_text, right_text):
 
 def test_they_agree_on_the_real_pair(real_store, tmp_path):
     """The gate that has stood since milestone 2, now checked from both sides."""
-    from phylocmp.trees.store import read_tree
+    from phylodelta.trees.store import read_tree
 
     left, right, _ = reconcile(
         read_tree(real_store / "trees" / "vibrio-nj").to_arrays(),
@@ -86,7 +86,7 @@ def test_they_agree_on_the_real_pair(real_store, tmp_path):
 
 def test_a_tree_against_itself_is_zero_both_ways(real_store, tmp_path):
     """The control that exposed two defects in other implementations."""
-    from phylocmp.trees.store import read_tree
+    from phylodelta.trees.store import read_tree
 
     arrays = read_tree(real_store / "trees" / "vibrio-nj").to_arrays()
     ours, theirs = both(tmp_path, arrays, arrays)

@@ -14,8 +14,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from phylocmp.trees import native
-from phylocmp.trees.newick import parse_newick, parse_newick_fast
+from phylodelta.trees import native
+from phylodelta.trees.newick import parse_newick, parse_newick_fast
 
 pytestmark = pytest.mark.skipif(
     not native.available(),

@@ -9,7 +9,7 @@
 #include "newick.hpp"
 
 namespace py = pybind11;
-using namespace phylocmp;
+using namespace phylodelta;
 
 namespace {
 
@@ -80,7 +80,7 @@ py::tuple best_matches_py(
 
 }  // namespace
 
-PYBIND11_MODULE(phylocmp_native, m) {
+PYBIND11_MODULE(phylodelta_native, m) {
     m.doc() = "Native core: Newick parsing and succinct tree operations.";
     m.attr("NO_PARENT") = NO_PARENT;
 

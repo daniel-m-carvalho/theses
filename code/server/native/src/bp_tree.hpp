@@ -19,7 +19,7 @@
 #include <string>
 #include <vector>
 
-namespace phylocmp {
+namespace phylodelta {
 
 struct BpTree {
     sdsl::bit_vector bv;
@@ -153,4 +153,4 @@ struct BpTree {
 };
 
 
-}  // namespace phylocmp
+}  // namespace phylodelta

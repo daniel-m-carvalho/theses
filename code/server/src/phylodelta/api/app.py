@@ -16,7 +16,7 @@ DESCRIPTION = """
 Serves **slices** of large phylogenetic trees, the comparison values that go
 with them, and isolate metadata for the leaves currently on screen.
 
-Everything expensive is computed **once, offline** (`phylocmp ingest-trees`,
+Everything expensive is computed **once, offline** (`phylodelta ingest-trees`,
 `compute-pairs`, `ingest-isolates`); a request is a memory-mapped read.
 
 ### Three conventions hold everywhere
@@ -107,7 +107,7 @@ ERROR_RESPONSES = {
 
 def create_app() -> FastAPI:
     app = FastAPI(
-        title="phylocmp",
+        title="PhyloDelta",
         version=API_VERSION,
         summary="Sliced delivery of large phylogenetic tree comparisons.",
         description=DESCRIPTION,

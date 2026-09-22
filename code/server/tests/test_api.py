@@ -8,10 +8,10 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture()
 def client(real_store, monkeypatch):
-    from phylocmp import config
-    from phylocmp.api import routes_meta
-    from phylocmp.api.app import create_app
-    from phylocmp.trees import registry
+    from phylodelta import config
+    from phylodelta.api import routes_meta
+    from phylodelta.api.app import create_app
+    from phylodelta.trees import registry
 
     monkeypatch.setattr(config, "STORE_DIR", real_store)
     monkeypatch.setattr(config, "TREES_DIR", real_store / "trees")
@@ -89,7 +89,7 @@ def test_metrics_endpoint_lists_registered_plugins(client):
 
 def test_a_pair_lists_its_computed_metrics(client, real_store):
     """A pair with nothing computed reports an empty list, not an absent one."""
-    from phylocmp.precompute.pipeline import compute_pairs
+    from phylodelta.precompute.pipeline import compute_pairs
 
     pair_id = "vibrio-nj__vibrio-upgma"
     before = {p["id"]: p for p in client.get("/api/v1/datasets").json()["pairs"]}

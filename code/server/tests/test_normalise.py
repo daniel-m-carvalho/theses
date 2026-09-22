@@ -7,8 +7,8 @@ import math
 import numpy as np
 import pytest
 
-from phylocmp.trees.newick import NO_PARENT, parse_newick
-from phylocmp.trees.normalise import assert_rooted_binary, suppress_unary
+from phylodelta.trees.newick import NO_PARENT, parse_newick
+from phylodelta.trees.normalise import assert_rooted_binary, suppress_unary
 
 
 def test_nothing_to_do_returns_the_same_object():

@@ -49,7 +49,7 @@ def correspondence_or_404(pair_id: str) -> CorrespondenceReader:
         raise errors.not_found(
             "comparison_not_computed",
             f"No computed comparison for pair {pair_id!r}.",
-            f"Run `phylocmp compute-pairs --only {pair_id}`, "
+            f"Run `phylodelta compute-pairs --only {pair_id}`, "
             "or see GET /api/datasets for pairs that are ready.",
         ) from None
 
@@ -68,7 +68,7 @@ def pair_or_404(pair_id: str, metric: str) -> PairReader:
         raise errors.not_found(
             "comparison_not_computed",
             f"No computed comparison for pair {pair_id!r}.",
-            f"Run `phylocmp compute-pairs --only {pair_id}`, "
+            f"Run `phylodelta compute-pairs --only {pair_id}`, "
             "or see GET /api/datasets for pairs that are ready.",
         ) from None
 

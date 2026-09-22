@@ -10,13 +10,13 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from phylocmp.trees.correspondence import (
+from phylodelta.trees.correspondence import (
     NO_CORRESPONDENCE,
     compute_correspondence,
     leaf_position_maps,
 )
-from phylocmp.trees.newick import parse_newick
-from phylocmp.trees.reconcile import reconcile
+from phylodelta.trees.newick import parse_newick
+from phylodelta.trees.reconcile import reconcile
 
 
 def internal_mask(arrays):
@@ -111,7 +111,7 @@ def test_best_match_is_at_least_the_lca_ratio():
 
 def test_both_estimators_agree_on_exact_matches(real_store):
     """RF is unaffected by which is used; only the gradient differs."""
-    from phylocmp.trees.store import read_tree
+    from phylodelta.trees.store import read_tree
 
     left, right, _ = reconcile(
         read_tree(real_store / "trees" / "vibrio-nj").to_arrays(),
@@ -124,7 +124,7 @@ def test_both_estimators_agree_on_exact_matches(real_store):
 # --- the real pair ---------------------------------------------------------
 
 def test_real_pair_similarity_is_in_range(real_store):
-    from phylocmp.trees.store import read_tree
+    from phylodelta.trees.store import read_tree
 
     left, right, _ = reconcile(
         read_tree(real_store / "trees" / "vibrio-nj").to_arrays(),
@@ -140,7 +140,7 @@ def test_real_pair_similarity_is_in_range(real_store):
 # --- the native search must agree exactly ----------------------------------
 
 def without_native(monkeypatch):
-    from phylocmp.trees import native
+    from phylodelta.trees import native
 
     monkeypatch.setattr(native, "extension", lambda: None)
 
@@ -163,7 +163,7 @@ def test_native_and_python_searches_agree(monkeypatch, left_text, right_text):
     different-but-equal answers, making the extension a behaviour change rather
     than a speed one.
     """
-    from phylocmp.trees import native
+    from phylodelta.trees import native
 
     if not native.available():
         pytest.skip("native extension not built")
@@ -183,8 +183,8 @@ def test_native_and_python_searches_agree(monkeypatch, left_text, right_text):
 
 
 def test_native_and_python_agree_on_the_real_pair(real_store, monkeypatch):
-    from phylocmp.trees import native
-    from phylocmp.trees.store import read_tree
+    from phylodelta.trees import native
+    from phylodelta.trees.store import read_tree
 
     if not native.available():
         pytest.skip("native extension not built")
@@ -212,7 +212,7 @@ def test_the_search_is_exact_not_heuristic(monkeypatch):
     Checked against an exhaustive scan written independently of both
     implementations, so a shared misunderstanding of the bound would show up.
     """
-    from phylocmp.trees import native
+    from phylodelta.trees import native
 
     if not native.available():
         pytest.skip("native extension not built")
@@ -240,7 +240,7 @@ def test_the_search_is_exact_not_heuristic(monkeypatch):
 
 def at_threads(monkeypatch, count: int, left, right):
     """Compute correspondence pinned to a thread count."""
-    from phylocmp import config
+    from phylodelta import config
 
     monkeypatch.setattr(config, "threads", lambda: count)
     return compute_correspondence(left, right)
@@ -255,7 +255,7 @@ def test_the_result_does_not_depend_on_the_thread_count(monkeypatch, threads):
     reasoning about determinism instead of testing it is how race conditions
     get shipped.
     """
-    from phylocmp.trees import native
+    from phylodelta.trees import native
 
     if not native.available():
         pytest.skip("native extension not built")
@@ -275,8 +275,8 @@ def test_the_result_does_not_depend_on_the_thread_count(monkeypatch, threads):
 
 
 def test_threading_is_deterministic_on_the_real_pair(real_store, monkeypatch):
-    from phylocmp.trees import native
-    from phylocmp.trees.store import read_tree
+    from phylodelta.trees import native
+    from phylodelta.trees.store import read_tree
 
     if not native.available():
         pytest.skip("native extension not built")
@@ -297,13 +297,13 @@ def test_threading_is_deterministic_on_the_real_pair(real_store, monkeypatch):
 
 
 def test_thread_count_is_configurable(monkeypatch):
-    from phylocmp import config
+    from phylodelta import config
 
-    monkeypatch.setenv("PHYLOCMP_THREADS", "3")
+    monkeypatch.setenv("PHYLODELTA_THREADS", "3")
     assert config.threads() == 3
-    monkeypatch.setenv("PHYLOCMP_THREADS", "")
+    monkeypatch.setenv("PHYLODELTA_THREADS", "")
     assert config.threads() == 0, "empty means auto"
-    monkeypatch.setenv("PHYLOCMP_THREADS", "nonsense")
+    monkeypatch.setenv("PHYLODELTA_THREADS", "nonsense")
     assert config.threads() == 0, "unparseable must not crash a batch"
-    monkeypatch.setenv("PHYLOCMP_THREADS", "-4")
+    monkeypatch.setenv("PHYLODELTA_THREADS", "-4")
     assert config.threads() == 0
