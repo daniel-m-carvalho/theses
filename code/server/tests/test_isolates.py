@@ -266,7 +266,7 @@ def client(isolate_store, monkeypatch):
 
 
 def test_keys_endpoint(client):
-    body = client.get("/api/isolates/vibrio/keys").json()
+    body = client.get("/api/v1/isolates/vibrio/keys").json()
     assert body["n_isolates"] == 26_629
     assert body["n_sequence_types"] == 18_831
     names = {f["name"] for f in body["facets"]}
@@ -275,7 +275,7 @@ def test_keys_endpoint(client):
 
 def test_values_endpoint_for_one_key(client):
     (body,) = client.get(
-        "/api/isolates/vibrio/values", params={"key": "Continent"}
+        "/api/v1/isolates/vibrio/values", params={"key": "Continent"}
     ).json()
     assert body["key"] == "Continent"
     assert body["values"][0]["count"] >= body["values"][-1]["count"]
@@ -283,14 +283,14 @@ def test_values_endpoint_for_one_key(client):
 
 def test_values_endpoint_accepts_several_keys(client):
     body = client.get(
-        "/api/isolates/vibrio/values", params=[("key", "Continent"), ("key", "Source Niche")]
+        "/api/v1/isolates/vibrio/values", params=[("key", "Continent"), ("key", "Source Niche")]
     ).json()
     assert [v["key"] for v in body] == ["Continent", "Source Niche"]
 
 
 def test_compositions_endpoint(client):
     body = client.post(
-        "/api/isolates/vibrio/compositions",
+        "/api/v1/isolates/vibrio/compositions",
         json={
             "leaves": ["1", "3", "99999999"],
             "segment_by": "Continent",
@@ -303,7 +303,7 @@ def test_compositions_endpoint(client):
 
 
 def test_unknown_species_lists_what_exists(client):
-    r = client.get("/api/isolates/nope/keys")
+    r = client.get("/api/v1/isolates/nope/keys")
     assert r.status_code == 404
     body = r.json()
     assert body["code"] == "isolates_not_found"
@@ -312,17 +312,17 @@ def test_unknown_species_lists_what_exists(client):
 
 def test_unknown_key_is_404(client):
     assert client.get(
-        "/api/isolates/vibrio/values", params={"key": "Nope"}
+        "/api/v1/isolates/vibrio/values", params={"key": "Nope"}
     ).status_code == 404
     assert client.post(
-        "/api/isolates/vibrio/compositions",
+        "/api/v1/isolates/vibrio/compositions",
         json={"leaves": ["1"], "segment_by": "Nope"},
     ).status_code == 404
 
 
 def test_unmatchable_filter_value_is_422_not_an_empty_answer(client):
     r = client.post(
-        "/api/isolates/vibrio/compositions",
+        "/api/v1/isolates/vibrio/compositions",
         json={"leaves": ["1"], "segment_by": "Continent",
               "filter": {"Continent": ["Atlantis"]}},
     )
@@ -337,7 +337,7 @@ def test_composition_for_a_whole_slice_is_quick(client):
     leaves = [str(n) for n in range(1, 501)]
     started = time.perf_counter()
     r = client.post(
-        "/api/isolates/vibrio/compositions",
+        "/api/v1/isolates/vibrio/compositions",
         json={"leaves": leaves, "segment_by": "Country",
               "filter": {"Source Niche": ["Human"]}},
     )

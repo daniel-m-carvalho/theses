@@ -1794,6 +1794,91 @@ constant factor, so it buys roughly **one doubling** of tree size and no more. B
 remaining lever is the algorithm — bottom-up overlap accumulation with small-to-large merging —
 which is recorded as deferred, not dismissed.
 
+## 18. Persistence: a module owns its storage, the API is the contract
+
+*Decided with the supervisors, 2026-09-22. One suggested PostgreSQL; the other that it should be
+"a base de dados que mais for conveniente", since "o ponto de integração com o PhyloViz será por
+meio da FastAPI bem definida" and "todos os módulos do PhyloViz 3.0 [têm] como requisito serem
+desacopláveis dos restantes".*
+
+### 18.1 The integration point is the API, so storage is internal
+
+**Decision.** This module owns its own persistence. No other module reads its files; the FastAPI is
+the only contract. Storage is therefore an implementation choice, revisable without coordination.
+
+**Rationale.** This is *database-per-service*, and the reasoning is that a shared schema is a worse
+coupling than an API, not a lesser one: it is invisible, unowned, and prevents either side from
+deploying independently. A module that brings its own store is **more** decoupleable than one
+requiring a shared database, which is what the modularity requirement asks for.
+
+That also dissolves the disagreement rather than settling it. PostgreSQL is a sound choice *when it
+is already part of the platform* — an operational convenience. It is not an architectural
+requirement, and nothing in this module's design has to commit either way.
+
+**Evidence that the seam is real, not asserted.** In §14 the columnar store was replaced by a
+structurally different succinct one — balanced parentheses over a bit vector, computing what the
+other held — and the API, the summariser and every endpoint were **unchanged**, producing
+**byte-identical slices** at seven budgets, from the root and from a wedge. The API touches no file
+directly; the summariser needs four methods (`subtree_end_of`, `leaf_count_of`, `branch_len_of`,
+`label`). Two working stores behind one unchanged interface is a demonstration, where most
+architecture writing offers a diagram.
+
+### 18.2 The store holds no system of record, which is what makes this cheap
+
+**Confirmed with the user (2026-09-22): there is no update path after precompute.** Everything in
+`store/` is derived from `datasets/` and reconstructed by `phylocmp build-all`. It is a **cache, not
+a database**.
+
+Owning your persistence normally means owning backup, migration and durability. Here:
+
+| | |
+|---|---|
+| backup | `cp -r`, or nothing — re-run `build-all` |
+| migration | every store writes a `FORMAT_VERSION`; a reader refuses a mismatch rather than misreading old bytes |
+| durability | no unique state to lose |
+| deployment | `uv sync` and a directory — no service, no credentials, no schema |
+
+**This invariant is load-bearing and is recorded because it is otherwise implicit.** The moment
+anything is written at runtime — an uploaded tree, a saved annotation, a session — the store holds
+data that exists nowhere else, and the full operational burden of the pattern arrives with it:
+real backups, migrations, concurrent writes, and a reason to want a database. Revisit this section
+before adding the first write.
+
+### 18.3 Where a database would fit if one were wanted
+
+The data has three shapes, and "PostgreSQL or not" is the wrong granularity for all three at once:
+
+| | shape | access | verdict |
+|---|---|---|---|
+| tree topology, correspondence, metric columns | flat arrays, 3.9 MB now, ~30–50 MB per pair at 500k nodes | *"entries 4,812 to 5,311 of six columns"* | **keep on disk** — that is a memcpy from an mmap (6.6 ms per slice); in SQL it is a query to plan, execute and serialise, and as `bytea` it is a filesystem with extra steps |
+| isolate metadata | 26,629 rows x 25 facets | filter by AND/OR across facets, group-count by one | **the genuine candidate.** What is built is a hand-rolled column store for exactly the query SQL is good at (3.0 ms for 500 leaves), but it answers only anticipated queries |
+| catalogue | which trees, pairs and metrics exist | listed per request | **would help at scale** — currently a directory scan, fine for three trees, noticeable at three hundred |
+
+The common landing place for this shape is relational metadata pointing at array files. Not needed
+now; cheap to adopt later precisely because of §18.1.
+
+### 18.4 API versioning follows from the API being the contract
+
+Routes moved to `/api/v1`. Not a commitment to maintaining two versions — a reservation of the
+ability to, which cannot be retrofitted once a consumer's client is in production. The costs are
+asymmetric: a prefix now, against coordinating a breaking change with another team later, or never
+changing a response shape again.
+
+Path rather than header, because whoever integrates this will be reading logs and running `curl`,
+and a path segment lets `/v1` and `/v2` run side by side through a migration.
+
+The policy is stated in the OpenAPI description, where an integrator will actually look:
+
+* **not breaking** — a new endpoint, a new field, a new metric, a new per-node column. This is why
+  metric outputs are *declared* (§9.1) rather than fixed: adding one is additive by construction.
+* **breaking** — removing or renaming a field, changing what one means, and above all **changing
+  what a node id denotes**. `id` is the join key across topology, comparison values and isolate
+  composition, so a client holding ids across such a change would silently misalign rather than
+  fail.
+
+The same discipline already exists one layer down: each store's `FORMAT_VERSION` is checked on
+read. The API deserved it too.
+
 ---
 
 ## Findings carried forward

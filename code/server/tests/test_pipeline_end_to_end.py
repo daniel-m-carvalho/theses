@@ -61,23 +61,23 @@ def client(built, monkeypatch):
 
 
 def test_health_reports_a_ready_store(client):
-    body = client.get("/api/health").json()
+    body = client.get("/api/v1/health").json()
     assert body["status"] == "ok" and body["store_ready"] is True
 
 
 def test_goeburst_is_not_ingested(client):
-    ids = {t["id"] for t in client.get("/api/datasets").json()["trees"]}
+    ids = {t["id"] for t in client.get("/api/v1/datasets").json()["trees"]}
     assert ids == {"mini-upgma", "mini-nj"}
 
 
 def test_the_unary_root_was_canonicalised(client):
     """The fixture's nj tree wraps its real root, as vibrio-nj's does."""
-    assert client.get("/api/trees/mini-nj").json()["suppressed_unary"] == 1
-    assert client.get("/api/trees/mini-upgma").json()["suppressed_unary"] == 0
+    assert client.get("/api/v1/trees/mini-nj").json()["suppressed_unary"] == 1
+    assert client.get("/api/v1/trees/mini-upgma").json()["suppressed_unary"] == 0
 
 
 def test_mismatched_leaf_sets_are_reconciled_and_reported(client):
-    body = client.get(f"/api/comparisons/{PAIR}").json()
+    body = client.get(f"/api/v1/comparisons/{PAIR}").json()
     assert body["shared_leaves"] == 39
     assert body["dropped_from_right"] == ["7"]
     assert body["dropped_from_left"] == []
@@ -96,7 +96,7 @@ def test_a_tree_compared_with_itself_would_score_zero(built):
 def test_slice_conserves_every_leaf(client):
     for budget in (1, 2, 5, 40, 500):
         body = client.get(
-            "/api/trees/mini-upgma/slice", params={"budget": budget}
+            "/api/v1/trees/mini-upgma/slice", params={"budget": budget}
         ).json()
         wedges = sum(body["nodes"]["truncated"])
         assert body["displayed_leaves"] <= budget
@@ -108,11 +108,11 @@ def test_slice_conserves_every_leaf(client):
 
 def test_slice_and_comparison_align(client):
     body = client.get(
-        "/api/trees/mini-nj/slice", params={"budget": 20, "compare": PAIR}
+        "/api/v1/trees/mini-nj/slice", params={"budget": 20, "compare": PAIR}
     ).json()
     assert body["comparison"]["id"] == body["nodes"]["id"]
     separate = client.get(
-        f"/api/comparisons/{PAIR}/slice", params={"tree": "mini-nj", "budget": 20}
+        f"/api/v1/comparisons/{PAIR}/slice", params={"tree": "mini-nj", "budget": 20}
     ).json()
     assert separate["nodes"] == body["comparison"]
 
@@ -120,14 +120,14 @@ def test_slice_and_comparison_align(client):
 def test_both_orderings_work(client):
     for order in ("size", "difference"):
         body = client.get(
-            "/api/trees/mini-nj/slice",
+            "/api/v1/trees/mini-nj/slice",
             params={"budget": 15, "compare": PAIR, "order": order},
         ).json()
         assert body["displayed_leaves"] <= 15
 
 
 def test_constant_column_is_not_a_facet(client):
-    names = {f["name"] for f in client.get("/api/isolates/mini/keys").json()["facets"]}
+    names = {f["name"] for f in client.get("/api/v1/isolates/mini/keys").json()["facets"]}
     assert "Differences" not in names, "one distinct value: cannot divide anything"
     assert "Barcode" not in names and "Uberstrain" not in names
     assert {"Source Niche", "Country", "Continent"} <= names
@@ -135,7 +135,7 @@ def test_constant_column_is_not_a_facet(client):
 
 def test_compositions_distinguish_no_data_from_filtered_out(client):
     body = client.post(
-        "/api/isolates/mini/compositions",
+        "/api/v1/isolates/mini/compositions",
         json={"leaves": [str(i) for i in range(1, 41)], "segment_by": "Country"},
     ).json()
     assert len(body["leaves"]) == 40
@@ -146,9 +146,9 @@ def test_compositions_distinguish_no_data_from_filtered_out(client):
 
 def test_errors_share_one_shape(client):
     for request, expected in (
-        (("GET", "/api/trees/nope"), "tree_not_found"),
-        (("GET", "/api/trees/mini-upgma/slice?root=99999"), "node_out_of_range"),
-        (("GET", "/api/isolates/nope/keys"), "isolates_not_found"),
+        (("GET", "/api/v1/trees/nope"), "tree_not_found"),
+        (("GET", "/api/v1/trees/mini-upgma/slice?root=99999"), "node_out_of_range"),
+        (("GET", "/api/v1/isolates/nope/keys"), "isolates_not_found"),
     ):
         method, url = request
         response = client.request(method, url)
@@ -159,7 +159,7 @@ def test_errors_share_one_shape(client):
 
 
 def test_invalid_parameters_use_the_same_error_shape(client):
-    body = client.get("/api/trees/mini-upgma/slice", params={"budget": 0}).json()
+    body = client.get("/api/v1/trees/mini-upgma/slice", params={"budget": 0}).json()
     assert body["code"] == "invalid_request"
     assert "budget" in body["detail"]
     assert body["errors"][0]["field"] == "budget"

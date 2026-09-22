@@ -24,9 +24,15 @@ from .schemas import (
     TreeSummary,
 )
 
-router = APIRouter(prefix="/api", tags=["meta"])
+#: The API's own version, independent of any store's FORMAT_VERSION.
+API_VERSION = "1.0.0"
 
-API_VERSION = "0.1.0"
+#: Every route lives under this. The version is in the path rather than a
+#: header because an integrator will be reading logs and running curl, and a
+#: path segment lets /v1 and /v2 run side by side through a migration.
+API_PREFIX = "/api/v1"
+
+router = APIRouter(prefix=API_PREFIX, tags=["meta"])
 
 
 @router.get("/health", response_model=HealthResponse, summary="Liveness and store readiness")

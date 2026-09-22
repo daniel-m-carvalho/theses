@@ -19,6 +19,7 @@ from ..metrics.store import PairReader
 from ..trees import registry as tree_registry
 from ..trees.summarise import flatten
 from . import errors
+from .routes_meta import API_PREFIX
 from .schemas import ComparisonSlice, ComparisonSummary, ComparisonValues
 from .slicing import (
     ORDER_DESCRIPTION,
@@ -29,7 +30,7 @@ from .slicing import (
     summariser_for,
 )
 
-router = APIRouter(prefix="/api/comparisons", tags=["comparisons"])
+router = APIRouter(prefix=f"{API_PREFIX}/comparisons", tags=["comparisons"])
 
 
 def values_at(

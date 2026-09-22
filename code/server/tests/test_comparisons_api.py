@@ -51,7 +51,7 @@ def client(computed_store, monkeypatch):
 # --- summary ---------------------------------------------------------------
 
 def test_summary_carries_scalars_and_provenance(client):
-    body = client.get(f"/api/comparisons/{PAIR}").json()
+    body = client.get(f"/api/v1/comparisons/{PAIR}").json()
     assert body["summary"]["rf"] == 6825
     assert body["summary"]["shared_clusters"] == 10_819
     assert body["shared_leaves"] == 17_645
@@ -62,12 +62,12 @@ def test_summary_carries_scalars_and_provenance(client):
 
 
 def test_whole_tree_values_are_opt_in(client):
-    body = client.get(f"/api/comparisons/{PAIR}", params={"include_values": True}).json()
+    body = client.get(f"/api/v1/comparisons/{PAIR}", params={"include_values": True}).json()
     assert len(body["values"]["id"]) == 35_289  # every node of the left tree
 
 
 def test_unknown_pair_explains_how_to_compute_it(client):
-    r = client.get("/api/comparisons/clostridium-upgma__vibrio-upgma")
+    r = client.get("/api/v1/comparisons/clostridium-upgma__vibrio-upgma")
     assert r.status_code == 404
     body = r.json()
     assert body["code"] == "comparison_not_computed"
@@ -75,7 +75,7 @@ def test_unknown_pair_explains_how_to_compute_it(client):
 
 
 def test_unknown_metric_names_what_is_available(client):
-    r = client.get(f"/api/comparisons/{PAIR}", params={"metric": "quartet"})
+    r = client.get(f"/api/v1/comparisons/{PAIR}", params={"metric": "quartet"})
     assert r.status_code == 404
     body = r.json()
     assert body["code"] == "metric_not_computed"
@@ -87,10 +87,10 @@ def test_unknown_metric_names_what_is_available(client):
 @pytest.mark.parametrize("budget", [5, 50, 300])
 def test_comparison_slice_matches_the_tree_slice_index_for_index(client, budget):
     tree = client.get(
-        "/api/trees/vibrio-nj/slice", params={"root": 0, "budget": budget}
+        "/api/v1/trees/vibrio-nj/slice", params={"root": 0, "budget": budget}
     ).json()
     values = client.get(
-        f"/api/comparisons/{PAIR}/slice",
+        f"/api/v1/comparisons/{PAIR}/slice",
         params={"tree": "vibrio-nj", "root": 0, "budget": budget},
     ).json()
     assert values["nodes"]["id"] == tree["nodes"]["id"]
@@ -100,10 +100,10 @@ def test_comparison_slice_matches_the_tree_slice_index_for_index(client, budget)
 def test_one_round_trip_matches_two(client):
     """?compare= must give exactly what the separate endpoint gives."""
     combined = client.get(
-        "/api/trees/vibrio-nj/slice", params={"budget": 100, "compare": PAIR}
+        "/api/v1/trees/vibrio-nj/slice", params={"budget": 100, "compare": PAIR}
     ).json()
     separate = client.get(
-        f"/api/comparisons/{PAIR}/slice", params={"tree": "vibrio-nj", "budget": 100}
+        f"/api/v1/comparisons/{PAIR}/slice", params={"tree": "vibrio-nj", "budget": 100}
     ).json()
     assert combined["comparison"] == separate["nodes"]
 
@@ -111,9 +111,9 @@ def test_one_round_trip_matches_two(client):
 def test_values_describe_the_node_they_sit_beside(client):
     """A displayed leaf's counterpart must carry the same label."""
     combined = client.get(
-        "/api/trees/vibrio-nj/slice", params={"budget": 200, "compare": PAIR}
+        "/api/v1/trees/vibrio-nj/slice", params={"budget": 200, "compare": PAIR}
     ).json()
-    other = client.get("/api/trees/vibrio-upgma").json()["id"]
+    other = client.get("/api/v1/trees/vibrio-upgma").json()["id"]
     n, v = combined["nodes"], combined["comparison"]
     assert v["id"] == n["id"]
 
@@ -123,7 +123,7 @@ def test_values_describe_the_node_they_sit_beside(client):
         if not is_leaf or v["corresponds"][k] is None:
             continue
         counterpart = client.get(
-            f"/api/trees/{other}/slice",
+            f"/api/v1/trees/{other}/slice",
             params={"root": v["corresponds"][k], "budget": 1},
         ).json()
         assert counterpart["nodes"]["label"][0] == n["label"][k]
@@ -135,7 +135,7 @@ def test_values_describe_the_node_they_sit_beside(client):
 
 def test_similarity_agrees_with_the_exact_verdict(client):
     body = client.get(
-        "/api/trees/vibrio-nj/slice", params={"budget": 400, "compare": PAIR}
+        "/api/v1/trees/vibrio-nj/slice", params={"budget": 400, "compare": PAIR}
     ).json()["comparison"]
     for sim, exact in zip(body["similarity"], body["exact"]):
         if sim is None:
@@ -148,7 +148,7 @@ def test_similarity_agrees_with_the_exact_verdict(client):
 def test_absent_values_are_null_not_nan(client):
     """JSON has no NaN; emitting one produces a document many parsers reject."""
     raw = client.get(
-        "/api/trees/vibrio-upgma/slice", params={"budget": 500, "compare": PAIR}
+        "/api/v1/trees/vibrio-upgma/slice", params={"budget": 500, "compare": PAIR}
     ).content
     assert b"NaN" not in raw
     json.loads(raw)  # strict: would raise on a bare NaN
@@ -162,7 +162,7 @@ def test_a_leaf_unique_to_one_tree_has_no_counterpart(client):
     real thing to show — but with no similarity and no counterpart.
     """
     whole = client.get(
-        "/api/trees/vibrio-upgma/slice",
+        "/api/v1/trees/vibrio-upgma/slice",
         params={"root": 0, "budget": 50_000, "compare": PAIR},
     ).json()
     n, v = whole["nodes"], whole["comparison"]
@@ -186,7 +186,7 @@ def test_a_leaf_unique_to_one_tree_has_no_counterpart(client):
 
 def test_asking_for_a_tree_outside_the_pair_is_refused(client):
     r = client.get(
-        f"/api/comparisons/{PAIR}/slice", params={"tree": "clostridium-upgma"}
+        f"/api/v1/comparisons/{PAIR}/slice", params={"tree": "clostridium-upgma"}
     )
     assert r.status_code == 400
     assert r.json()["code"] == "tree_not_in_pair"
@@ -194,7 +194,7 @@ def test_asking_for_a_tree_outside_the_pair_is_refused(client):
 
 def test_compare_with_an_uncomputed_pair_is_404(client):
     r = client.get(
-        "/api/trees/vibrio-nj/slice",
+        "/api/v1/trees/vibrio-nj/slice",
         params={"budget": 10, "compare": "clostridium-upgma__vibrio-nj"},
     )
     assert r.status_code == 404
@@ -202,11 +202,11 @@ def test_compare_with_an_uncomputed_pair_is_404(client):
 
 def test_slice_at_a_subtree_carries_its_own_values(client):
     top = client.get(
-        "/api/trees/vibrio-nj/slice", params={"budget": 20, "compare": PAIR}
+        "/api/v1/trees/vibrio-nj/slice", params={"budget": 20, "compare": PAIR}
     ).json()
     wedge = next(i for i, c in zip(top["nodes"]["id"], top["nodes"]["truncated"]) if c)
     sub = client.get(
-        "/api/trees/vibrio-nj/slice",
+        "/api/v1/trees/vibrio-nj/slice",
         params={"root": wedge, "budget": 40, "compare": PAIR},
     ).json()
     assert sub["nodes"]["id"][0] == wedge
@@ -220,7 +220,7 @@ def test_difference_ordering_surfaces_more_divergent_clades(client):
     """order=difference must land on changes that order=size misses."""
     def worst_similarity(order):
         body = client.get(
-            "/api/trees/vibrio-nj/slice",
+            "/api/v1/trees/vibrio-nj/slice",
             params={"budget": 100, "compare": PAIR, "order": order},
         ).json()
         vals = [s for s in body["comparison"]["similarity"] if s is not None]
@@ -233,7 +233,7 @@ def test_ordering_preserves_the_conservation_invariant(client):
     """Priority decides where detail goes; it must never lose a leaf."""
     for order in ("size", "difference"):
         body = client.get(
-            "/api/trees/vibrio-nj/slice",
+            "/api/v1/trees/vibrio-nj/slice",
             params={"budget": 150, "compare": PAIR, "order": order},
         ).json()
         wedges = sum(body["nodes"]["truncated"])
@@ -247,11 +247,11 @@ def test_ordering_preserves_the_conservation_invariant(client):
 def test_both_endpoints_agree_under_difference_ordering(client):
     """The alignment gate must hold for every ordering, not just the default."""
     tree = client.get(
-        "/api/trees/vibrio-nj/slice",
+        "/api/v1/trees/vibrio-nj/slice",
         params={"budget": 120, "compare": PAIR, "order": "difference"},
     ).json()
     values = client.get(
-        f"/api/comparisons/{PAIR}/slice",
+        f"/api/v1/comparisons/{PAIR}/slice",
         params={"tree": "vibrio-nj", "budget": 120, "order": "difference"},
     ).json()
     assert values["nodes"]["id"] == tree["nodes"]["id"]
@@ -260,11 +260,11 @@ def test_both_endpoints_agree_under_difference_ordering(client):
 
 def test_difference_ordering_changes_the_node_set(client):
     a = client.get(
-        "/api/trees/vibrio-nj/slice",
+        "/api/v1/trees/vibrio-nj/slice",
         params={"budget": 100, "compare": PAIR, "order": "size"},
     ).json()["nodes"]["id"]
     b = client.get(
-        "/api/trees/vibrio-nj/slice",
+        "/api/v1/trees/vibrio-nj/slice",
         params={"budget": 100, "compare": PAIR, "order": "difference"},
     ).json()["nodes"]["id"]
     assert a != b, "the two orderings should not produce the same slice"
@@ -272,7 +272,7 @@ def test_difference_ordering_changes_the_node_set(client):
 
 def test_difference_without_a_comparison_is_refused(client):
     r = client.get(
-        "/api/trees/vibrio-nj/slice", params={"budget": 10, "order": "difference"}
+        "/api/v1/trees/vibrio-nj/slice", params={"budget": 10, "order": "difference"}
     )
     assert r.status_code == 400
     assert r.json()["code"] == "order_needs_comparison"
@@ -280,7 +280,7 @@ def test_difference_without_a_comparison_is_refused(client):
 
 def test_unknown_order_is_rejected(client):
     r = client.get(
-        "/api/trees/vibrio-nj/slice",
+        "/api/v1/trees/vibrio-nj/slice",
         params={"budget": 10, "compare": PAIR, "order": "sideways"},
     )
     assert r.status_code == 422
@@ -311,12 +311,12 @@ def test_a_scalar_only_metric_is_served_with_the_full_gradient(client, computed_
     reset_cache()
 
     summary = client.get(
-        f"/api/comparisons/{PAIR}", params={"metric": "demo-scalar"}
+        f"/api/v1/comparisons/{PAIR}", params={"metric": "demo-scalar"}
     ).json()
     assert summary["summary"]["distance"] == 12.5
 
     body = client.get(
-        "/api/trees/vibrio-nj/slice",
+        "/api/v1/trees/vibrio-nj/slice",
         params={"budget": 50, "compare": PAIR, "metric": "demo-scalar"},
     ).json()
     values = body["comparison"]
@@ -346,7 +346,7 @@ def test_difference_ordering_works_for_a_scalar_only_metric(client, computed_sto
     reset_cache()
 
     body = client.get(
-        "/api/trees/vibrio-nj/slice",
+        "/api/v1/trees/vibrio-nj/slice",
         params={"budget": 100, "compare": PAIR, "metric": "demo-scalar2",
                 "order": "difference"},
     ).json()
@@ -356,7 +356,7 @@ def test_difference_ordering_works_for_a_scalar_only_metric(client, computed_sto
 
 def test_metrics_endpoint_describes_what_a_column_means(client):
     """Enough for a client to render a column it has never seen."""
-    rf = {m["name"]: m for m in client.get("/api/metrics").json()}["rf"]
+    rf = {m["name"]: m for m in client.get("/api/v1/metrics").json()}["rf"]
     exact = {c["name"]: c for c in rf["outputs"]["columns"]}["exact"]
     assert exact["semantics"] == "boolean"
     assert exact["render"] == "overlay"

@@ -35,11 +35,37 @@ hidden_leaves == total_leaves`. A wedge carries the id to expand it with.
 
 ### A first request
 
-    GET /api/datasets
-    GET /api/trees/vibrio-upgma/slice?budget=500&compare=vibrio-nj__vibrio-upgma
+    GET /api/v1/datasets
+    GET /api/v1/trees/vibrio-upgma/slice?budget=500&compare=vibrio-nj__vibrio-upgma
 
 The second returns topology and comparison values together, already reduced to
 500 tips. See the README for a full walkthrough.
+
+### Versioning
+
+Every route lives under `/api/v1`. The version is in the path so that two
+versions can be served side by side during a migration, and so that which one a
+client used is visible in a log.
+
+**These are not breaking changes and will not bump the version.** Clients must
+tolerate them:
+
+* a new endpoint, or a new field on an existing response
+* a new metric, or a new per-node column from an existing metric — which is why
+  metrics *declare* their outputs at `/api/v1/metrics` rather than the set being
+  fixed
+
+**These are breaking, and will bump it:**
+
+* removing or renaming a field, or changing what one means
+* changing what a **node id** denotes
+
+That last deserves emphasis. `id` is the join key across topology, comparison
+values and isolate composition; a client holding ids across a change of meaning
+would silently misalign rather than fail. Node ids are pre-order positions in
+this server's canonical form, which is stable for a given store, and a store
+that changes shape declares a new `format_version` rather than reusing the old
+one.
 """
 
 TAGS = [

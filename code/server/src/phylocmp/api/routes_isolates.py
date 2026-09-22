@@ -12,6 +12,7 @@ from fastapi import APIRouter, Body, Path, Query
 from ..isolates import registry as isolate_registry
 from ..isolates.query import UnknownFacet, UnknownValue, compositions, value_counts
 from . import errors
+from .routes_meta import API_PREFIX
 from .schemas import (
     CompositionRequest,
     CompositionResponse,
@@ -22,7 +23,7 @@ from .schemas import (
     ValueCount,
 )
 
-router = APIRouter(prefix="/api/isolates", tags=["isolates"])
+router = APIRouter(prefix=f"{API_PREFIX}/isolates", tags=["isolates"])
 
 #: A slice cannot show more leaves than its budget, and the cap on that is
 #: 50,000 (§4.6). Matching it here keeps one request bounded without ever

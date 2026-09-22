@@ -18,7 +18,7 @@ from fastapi.testclient import TestClient
 README = Path(__file__).resolve().parents[1] / "README.md"
 
 #: Every `localhost:8000/...` URL the README shows, in order.
-URL_PATTERN = re.compile(r"localhost:8000(/api/[^\s'\"\\|]+)")
+URL_PATTERN = re.compile(r"localhost:8000(/api/v1/[^\s'\"\\|]+)")
 
 
 def documented_paths() -> list[str]:
@@ -59,7 +59,7 @@ def test_every_documented_get_still_works(client, path):
 def test_the_documented_post_still_works(client):
     """The compositions example, which carries a body and so cannot be scraped."""
     response = client.post(
-        "/api/isolates/vibrio/compositions",
+        "/api/v1/isolates/vibrio/compositions",
         json={
             "leaves": ["1", "3", "15"],
             "segment_by": "Continent",
@@ -74,13 +74,13 @@ def test_the_documented_post_still_works(client):
 
 
 def test_the_documented_error_shape_is_what_is_served(client):
-    body = client.get("/api/trees/nope").json()
+    body = client.get("/api/v1/trees/nope").json()
     assert set(body) == {"detail", "code", "hint"}
     assert body["code"] == "tree_not_found"
 
 
 def test_the_conservation_identity_the_readme_states(client):
-    body = client.get("/api/trees/vibrio-upgma/slice", params={"budget": 500}).json()
+    body = client.get("/api/v1/trees/vibrio-upgma/slice", params={"budget": 500}).json()
     wedges = sum(body["nodes"]["truncated"])
     assert (
         body["displayed_leaves"] - wedges + body["hidden_leaves"]

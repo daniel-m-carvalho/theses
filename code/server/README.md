@@ -79,7 +79,7 @@ Every command below is runnable against a freshly built store.
 ### 1. What is here
 
 ```sh
-curl -s localhost:8000/api/datasets | jq '{trees: [.trees[].id], pairs: [.pairs[].id]}'
+curl -s localhost:8000/api/v1/datasets | jq '{trees: [.trees[].id], pairs: [.pairs[].id]}'
 ```
 
 ```json
@@ -98,7 +98,7 @@ labels while sharing no organism. The server says so and lets you decide.
 ### 2. A tree, summarised to what you can draw
 
 ```sh
-curl -s 'localhost:8000/api/trees/vibrio-upgma/slice?budget=500' | jq '{
+curl -s 'localhost:8000/api/v1/trees/vibrio-upgma/slice?budget=500' | jq '{
   displayed_leaves, hidden_leaves, total_leaves, nodes: (.nodes.id | length)}'
 ```
 
@@ -114,7 +114,7 @@ have not expanded, and `nodes.true_leaf_count[k]` says how many leaves are behin
 Take any truncated tip's id and slice again at it:
 
 ```sh
-curl -s 'localhost:8000/api/trees/vibrio-upgma/slice?root=31212&budget=50' | jq '{root, total_leaves}'
+curl -s 'localhost:8000/api/v1/trees/vibrio-upgma/slice?root=31212&budget=50' | jq '{root, total_leaves}'
 ```
 
 ```json
@@ -126,7 +126,7 @@ No session, no cursor — the id is enough.
 ### 4. Topology and comparison in one request
 
 ```sh
-curl -s 'localhost:8000/api/trees/vibrio-nj/slice?budget=200&compare=vibrio-nj__vibrio-upgma' \
+curl -s 'localhost:8000/api/v1/trees/vibrio-nj/slice?budget=200&compare=vibrio-nj__vibrio-upgma' \
   | jq '{aligned: (.comparison.id == .nodes.id), first_similarity: .comparison.similarity[0:3]}'
 ```
 
@@ -153,7 +153,7 @@ gradient and `exact` as an overlay or filter. §2.7 of DECISIONS.md has the meas
 ### 5. Navigating toward the differences
 
 ```sh
-curl -s 'localhost:8000/api/trees/vibrio-nj/slice?budget=100&compare=vibrio-nj__vibrio-upgma&order=difference' \
+curl -s 'localhost:8000/api/v1/trees/vibrio-nj/slice?budget=100&compare=vibrio-nj__vibrio-upgma&order=difference' \
   | jq '[.comparison.similarity[] | select(. != null)] | min'
 ```
 
@@ -168,7 +168,7 @@ from the comparison values.
 ### 6. The comparison's scalars
 
 ```sh
-curl -s localhost:8000/api/comparisons/vibrio-nj__vibrio-upgma | jq '{summary, shared_leaves, dropped_from_right}'
+curl -s localhost:8000/api/v1/comparisons/vibrio-nj__vibrio-upgma | jq '{summary, shared_leaves, dropped_from_right}'
 ```
 
 ```json
@@ -188,19 +188,19 @@ reference implementation (`TreeDiff`, by the authors of the algorithm) exactly.
 What can be filtered on:
 
 ```sh
-curl -s localhost:8000/api/isolates/vibrio/keys | jq '.facets[] | select(.segmentable) | .name' | head -5
+curl -s localhost:8000/api/v1/isolates/vibrio/keys | jq '.facets[] | select(.segmentable) | .name' | head -5
 ```
 
 The values behind one key:
 
 ```sh
-curl -s 'localhost:8000/api/isolates/vibrio/values?key=Continent' | jq '.[0].values[0:3]'
+curl -s 'localhost:8000/api/v1/isolates/vibrio/values?key=Continent' | jq '.[0].values[0:3]'
 ```
 
 And the composition of the leaves you are showing — one key segments, the rest filter:
 
 ```sh
-curl -s -X POST localhost:8000/api/isolates/vibrio/compositions \
+curl -s -X POST localhost:8000/api/v1/isolates/vibrio/compositions \
   -H 'content-type: application/json' \
   -d '{"leaves": ["1","3","15"], "segment_by": "Continent",
        "filter": {"Source Niche": ["Human","Environment"]}}' \
@@ -233,7 +233,7 @@ Every failure has the same shape:
 {
   "detail": "No tree 'nope'.",
   "code": "tree_not_found",
-  "hint": "GET /api/datasets lists the ingested trees."
+  "hint": "GET /api/v1/datasets lists the ingested trees."
 }
 ```
 
@@ -250,7 +250,7 @@ shape with `code: "invalid_request"` and an `errors` array naming each bad field
 | `src/phylocmp/trees/` | Newick parsing, canonicalisation, the columnar store, slicing |
 | `src/phylocmp/metrics/` | Metric contract and registry; `plugins/rf_python/` is Robinson-Foulds |
 | `src/phylocmp/isolates/` | Isolate ingest and filtered composition queries |
-| `src/phylocmp/api/` | FastAPI routes; `schemas.py` is the wire contract |
+| `src/phylocmp/api/v1/` | FastAPI routes; `schemas.py` is the wire contract |
 | `src/phylocmp/precompute/` | The offline CLI |
 | `native/` | The optional C++ extension (`build.sh`), and `build_treediff.sh` for the conformance oracle |
 | `tests/fixtures/` | A 6 KB dataset so the suite runs without the real 20 MB |
@@ -274,7 +274,7 @@ anywhere.
 | `triplet` | subprocess | Triplet distance — a finer-grained signal that does not saturate on large clades |
 
 `rf` and `rf-treediff` should always agree; a disagreement means one of them is wrong. The
-subprocess metrics need `./native/build_treediff.sh`; `/api/metrics` reports `available: false`
+subprocess metrics need `./native/build_treediff.sh`; `/api/v1/metrics` reports `available: false`
 until then.
 
 Several metrics in one run share the expensive work:

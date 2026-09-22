@@ -13,10 +13,11 @@ from ..trees import registry
 from ..trees.summarise import count_leaves, flatten
 from .routes_comparisons import values_at
 from . import errors
+from .routes_meta import API_PREFIX
 from .schemas import SliceNodes, TreeDetail, TreeSlice
 from .slicing import ORDER_DESCRIPTION, Order, pair_or_404, side_of, summariser_for
 
-router = APIRouter(prefix="/api/trees", tags=["trees"])
+router = APIRouter(prefix=f"{API_PREFIX}/trees", tags=["trees"])
 
 #: Guard-rail, not a recommendation. A browser drawing more tips than this is
 #: already past the point the slicing exists to avoid; the cap stops one request
