@@ -2371,6 +2371,36 @@ The exact search here is ground truth for it. Method, and three ways to get it w
 under *References and provenance → What is adopted from Phylo.io*. Waits on the new frontend, like
 all comparison work.
 
+**A comment-density pass over the whole codebase, once the project is done** (user, 2026-09-23).
+
+The comments are currently written for someone building the thing — they carry the reasoning, the
+rejected alternative and the measurement that settled it, because that is what this stage of the
+work needed and because much of it fed this document. That density is a working artefact, not a
+house style, and it should not be what a reader inherits.
+
+The pass is deferred rather than done now for one reason: the reasoning is still live. A comment
+explaining why correspondence is computed for every pair is load-bearing while that is still being
+revisited, and becomes noise once it is settled. Stripping it early would mean re-deriving it.
+
+**The criterion, so the pass is mechanical.** Keep a comment when it says something the code cannot:
+
+* a **non-obvious constraint** — 1-based versus 0-based indexing against TreeDiff, `find_close(i) + 1`
+  for `num_leaves`, why an inclusive bound is required where a strict one looks natural
+* a **measured number** that justifies a choice — 41 KB positional against 236 KB keyed, 27 MB RSS
+  under 264 MB of upload
+* a **security or correctness property** that is invisible locally — why "not yours" and "does not
+  exist" return the same 404, why ownership is checked before the store is opened
+* a **pointer to the record** — a `§n` reference, so the long form is findable without being inlined
+
+Remove a comment when it restates the code, narrates the obvious sequence of a function, explains a
+decision this document already holds in full, or is addressed to whoever is writing it rather than
+whoever is reading it. Module docstrings should survive as orientation; the running commentary
+inside functions is where most of the cut is.
+
+The `§n` references make this safe: the reasoning has somewhere to live that is not the source file,
+so cutting a comment loses nothing. That is what this document is for, and the pass is partly a test
+of whether it has been doing its job.
+
 **Other deferrals** carried from earlier sections: the succinct representation (§2.1, after
 correctness); the subprocess metric kind (§3.5, contract defined, not wired); a crosswalk between
 label spaces for trees typed under different schemes (§1.7, `label_match` field reserved);
