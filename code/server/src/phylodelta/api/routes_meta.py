@@ -12,6 +12,7 @@ from ..trees import registry
 from .identity import current_owner
 from ..metrics import registry as metric_registry
 from .. import db
+from ..db import jobs as queue
 from ..metrics import registry_pairs
 from ..metrics.runners import is_available
 from .schemas import (
@@ -39,64 +40,87 @@ router = APIRouter(prefix=API_PREFIX, tags=["meta"])
 
 @router.get("/health", response_model=HealthResponse, summary="Liveness and store readiness")
 def health() -> HealthResponse:
-    tree_ids = registry.available_tree_ids()
-    return HealthResponse(status="ok", version=API_VERSION, store_ready=bool(tree_ids))
+    """Liveness, plus whether anything is draining the queue.
 
-
-def _pairs(trees: list[TreeSummary]) -> list[PairSummary]:
-    """Every pair of trees that shares at least one leaf label.
-
-    Comparability is decided by **measured label overlap**, not by a rule about
-    species. Two trees with no shared label cannot be compared by any
-    clade-based metric -- there is no correspondence between their leaves for a
-    clade to be preserved across -- so those pairs are omitted. Everything else
-    is offered, with the evidence attached.
-
-    Sequence types are numbered per species, so a vibrio and a clostridium tree
-    overlap on ~99% of labels while sharing no actual organism. That is reported
-    as a caution rather than used to block the pair: whether a cross-species
-    comparison is worth making is the biologist's call, not this server's. What
-    the server owes them is a clear statement of what was matched and how.
+    `queue` is here because the failure an operator actually hits is not the
+    API being down — it answers fine — but no worker running, which looks
+    identical to a user except that nothing ever leaves `pending`. A rising
+    pending count with nothing running is that, visible.
     """
+    tree_ids = registry.available_tree_ids()
+    try:
+        depth = queue.queue_depth()
+    except Exception:
+        # Health must not fail because the database is unreachable; that is
+        # itself worth reporting, and reporting it needs this to answer.
+        depth = {}
+    return HealthResponse(
+        status="ok",
+        version=API_VERSION,
+        store_ready=bool(tree_ids),
+        queue=depth,
+    )
+
+
+def _pairs(owner: str, trees: list[TreeSummary]) -> list[PairSummary]:
+    """The comparisons this owner actually has.
+
+    **Read from the database, not derived from the trees.** This used to
+    enumerate every combination of an owner's trees and offer each as an
+    available pair. That was right when the catalogue was the only source —
+    every combination really had been computed — and became wrong the moment a
+    comparison was something a user creates:
+
+    * it emitted `sorted(a, b)` as the id, while an uploaded pair is stored
+      under the order it was uploaded in, so a client following the listed id
+      got a 404;
+    * it advertised comparisons nobody had asked for and nothing had computed;
+    * it was quadratic in the owner's trees, and loaded every tree's full label
+      set on every request to decide overlap.
+
+    Now a pair is listed because a row says it exists. The evidence — shared
+    leaves, the species caution — is read back from what the computation
+    actually recorded rather than re-derived, so the listing cannot disagree
+    with the result.
+    """
+    known = {tree.id: tree for tree in trees}
     out: list[PairSummary] = []
-    for left, right in itertools.combinations(sorted(trees, key=lambda t: t.id), 2):
-        left_labels = registry.leaf_label_set(left.id)
-        right_labels = registry.leaf_label_set(right.id)
-        shared = len(left_labels & right_labels)
-        if shared == 0:
-            continue
 
-        same_species = left.species == right.species
-        fraction = shared / max(1, min(len(left_labels), len(right_labels)))
-        caution = None
-        if not same_species:
-            caution = (
-                f"{left.species} and {right.species} are different species. "
-                "Sequence types are numbered per species, so leaves matched here "
-                "by identical labels are not the same organisms. Interpret any "
-                "distance accordingly."
-            )
-
-        pair_id = f"{left.id}__{right.id}"
-        # Via the registry, which knows that a pair's shared correspondence is
-        # not one of its metrics — it sits in a sibling directory.
-        metrics = registry_pairs.available(pair_id)
-        out.append(
-            PairSummary(
-                id=pair_id,
-                left=left.id,
-                right=right.id,
-                species=left.species if same_species else f"{left.species}/{right.species}",
-                same_species=same_species,
-                label_match="identity",
-                shared_leaves=shared,
-                shared_fraction=round(fraction, 4),
-                caution=caution,
-                metrics=metrics,
-            )
+    for record in db.comparisons_for(owner):
+        left, right = record.left_id, record.right_id
+        status = record.status.value
+        summary = PairSummary(
+            id=record.id, left=left, right=right,
+            species="", same_species=None, status=status, metrics=[],
         )
-    return out
 
+        left_tree, right_tree = known.get(left), known.get(right)
+        if left_tree and right_tree:
+            left_species, right_species = left_tree.species, right_tree.species
+            declared = bool(left_species and right_species)
+            summary.same_species = (
+                left_species == right_species if declared else None
+            )
+            summary.species = (
+                left_species
+                if summary.same_species
+                else "/".join(p for p in (left_species, right_species) if p)
+            )
+
+        # Only a computed pair has a correspondence to report from.
+        if status == "ready" and registry_pairs.has_correspondence(record.id):
+            notes = registry_pairs.get_correspondence(record.id).meta.notes
+            reconciliation = notes.get("reconciliation", {})
+            summary.shared_leaves = reconciliation.get("shared_leaves", 0)
+            summary.label_match = reconciliation.get("label_match", "identity")
+            summary.caution = notes.get("caution")
+            if left_tree and right_tree:
+                smaller = max(1, min(left_tree.n_leaves, right_tree.n_leaves))
+                summary.shared_fraction = round(summary.shared_leaves / smaller, 4)
+            summary.metrics = registry_pairs.available(record.id)
+
+        out.append(summary)
+    return out
 
 def _isolates(owner: str) -> list[IsolateSummary]:
     out: list[IsolateSummary] = []
@@ -155,7 +179,7 @@ def datasets(owner: str = Depends(current_owner)) -> DatasetsResponse:
             )
         )
     return DatasetsResponse(
-        trees=trees, pairs=_pairs(trees), isolates=_isolates(owner)
+        trees=trees, pairs=_pairs(owner, trees), isolates=_isolates(owner)
     )
 
 

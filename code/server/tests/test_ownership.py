@@ -305,3 +305,74 @@ def test_every_data_endpoint_declares_an_owner():
         )
     }
     assert unscoped == {"GET /api/v1/health", "GET /api/v1/metrics"}
+
+
+# --- schema changes over a populated database -------------------------------
+
+def test_a_missing_column_is_added_without_losing_rows(tmp_path):
+    """The failure this prevents is not hypothetical.
+
+    Adding `display_name` to `comparisons` broke every read against a database
+    that already existed, because `create_all` skips a table that is present
+    whatever shape it is in. While stores were rebuildable that was an
+    inconvenience; once uploads put user data in there it is data loss.
+    """
+    import sqlite3
+
+    from phylodelta import db
+
+    with db.using_store(tmp_path):
+        db.create_schema()
+        db.record_upload(
+            "L__R", "L", "R", "alice", "a comparison", "l.nwk", "r.nwk", "pairs/L__R"
+        )
+
+    # Simulate the older schema: drop a column the model now expects.
+    database = tmp_path / "phylodelta.sqlite"
+    connection = sqlite3.connect(database)
+    connection.execute("ALTER TABLE comparisons DROP COLUMN display_name")
+    connection.commit()
+    connection.close()
+
+    db.reset()
+    with db.using_store(tmp_path):
+        db.create_schema()
+        recovered = db.comparison_for("alice", "L__R")
+        assert recovered is not None, "the row survived the migration"
+        assert recovered.left_id == "L"
+        # Re-added with the model's default rather than left NULL, so the
+        # migrated value matches what a fresh insert would get.
+        assert recovered.display_name == ""
+
+
+def test_an_unmigratable_change_is_refused_rather_than_guessed(tmp_path):
+    """Additive only. Anything else fails loudly instead of losing data."""
+    from sqlalchemy import Column, Integer, MetaData, String, Table, create_engine
+
+    from phylodelta.db.session import _add_missing_columns
+
+    made = create_engine(f"sqlite:///{tmp_path / 'probe.sqlite'}", future=True)
+
+    before = MetaData()
+    Table("thing", before, Column("id", String(8), primary_key=True))
+    before.create_all(made)
+
+    # A new primary key cannot be added to a populated table in any engine.
+    after = MetaData()
+    Table(
+        "thing", after,
+        Column("id", String(8), primary_key=True),
+        Column("second_id", String(8), primary_key=True),
+    )
+    with pytest.raises(RuntimeError, match="new primary key"):
+        _add_missing_columns(made, after)
+
+    # NOT NULL with nothing to give the rows already there.
+    stubborn = MetaData()
+    Table(
+        "thing", stubborn,
+        Column("id", String(8), primary_key=True),
+        Column("count", Integer, nullable=False),
+    )
+    with pytest.raises(RuntimeError, match="no default"):
+        _add_missing_columns(made, stubborn)

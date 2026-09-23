@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from sqlalchemy import select
 
 from .models import (
@@ -12,6 +14,10 @@ from .models import (
     DatasetStatus,
 )
 from .session import session
+
+
+def _utcnow() -> datetime:
+    return datetime.now(UTC)
 
 
 def register_dataset(
@@ -152,3 +158,64 @@ def comparisons_for(owner_id: str) -> list[Comparison]:
                 .order_by(Comparison.created_at.desc(), Comparison.id)
             )
         )
+
+
+def comparison_by_id(comparison_id: str) -> Comparison | None:
+    """One comparison, **without an ownership check**.
+
+    For the worker, which is not acting on behalf of a requester: it has
+    already claimed this id from the queue and needs the owner to attribute
+    what it builds. Every API path uses `comparison_for` instead, which takes
+    an owner and is the only version reachable from a request.
+    """
+    with session() as active:
+        return active.get(Comparison, comparison_id)
+
+
+def set_dataset_status(
+    dataset_id: str, status: DatasetStatus, error: str | None = None
+) -> None:
+    """Move a dataset through ingestion.
+
+    Separate from `register_dataset`, which always lands on `ready`: this is
+    for the states around it, and for recording why one failed.
+    """
+    with session() as active:
+        found = active.get(Dataset, dataset_id)
+        if found is None:
+            return
+        found.status = status
+        found.error = error
+
+
+def record_computed_pair(
+    pair_id: str,
+    left_id: str,
+    right_id: str,
+    owner_id: str,
+    display_name: str = "",
+) -> None:
+    """Record a pair the offline sweep computed, as already `ready`.
+
+    So that "a comparison exists" means one thing. The sweep and an upload
+    arrive at the same store layout by different routes; if only uploads left a
+    row, the listing would have to union the database with a directory scan and
+    the two could disagree. Idempotent, because the sweep is.
+    """
+    with session() as active:
+        existing = active.get(Comparison, pair_id)
+        if existing is None:
+            active.add(
+                Comparison(
+                    id=pair_id, owner_id=owner_id, left_id=left_id, right_id=right_id,
+                    display_name=display_name or pair_id,
+                    status=ComparisonStatus.READY,
+                    store_path=f"pairs/{pair_id}",
+                    finished_at=_utcnow(),
+                )
+            )
+            return
+        existing.owner_id = owner_id
+        existing.status = ComparisonStatus.READY
+        existing.error = None
+        existing.finished_at = _utcnow()

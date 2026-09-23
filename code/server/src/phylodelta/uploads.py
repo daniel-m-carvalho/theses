@@ -102,6 +102,11 @@ class Bundle:
     directory: Path
     files: dict[str, StoredFile]
     display_name: str
+    #: What the uploader says each tree is. Optional, and empty when not
+    #: declared — which the pipeline reports as unknown rather than assuming
+    #: the two match.
+    left_species: str = ""
+    right_species: str = ""
 
 
 def uploads_dir() -> Path:
@@ -177,6 +182,8 @@ ROLES = {
 def accept(
     sources: dict[str, tuple[str, object]],
     display_name: str = "",
+    left_species: str = "",
+    right_species: str = "",
     root: Path | None = None,
 ) -> Bundle:
     """Receive a bundle, streaming each file to disk as it arrives.
@@ -230,6 +237,8 @@ def accept(
         directory=directory,
         files=stored,
         display_name=display_name or _default_name(stored),
+        left_species=left_species.strip(),
+        right_species=right_species.strip(),
     )
     _write_manifest(bundle)
     return bundle
@@ -254,6 +263,8 @@ def _write_manifest(bundle: Bundle) -> None:
         "left_id": bundle.left_id,
         "right_id": bundle.right_id,
         "display_name": bundle.display_name,
+        "left_species": bundle.left_species,
+        "right_species": bundle.right_species,
         "files": {
             role: {
                 "path": stored.path.name,

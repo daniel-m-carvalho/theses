@@ -28,3 +28,19 @@ def real_store(tmp_path_factory, datasets_dir: Path) -> Path:
     store = tmp_path_factory.mktemp("store")
     assert ingest_trees(datasets_dir=datasets_dir, store_dir=store) == 0
     return store
+
+
+@pytest.fixture(scope="session")
+def compared_store(tmp_path_factory, datasets_dir: Path) -> Path:
+    """A store with the trees ingested *and* every pair computed.
+
+    Separate from `real_store` rather than computed into it, so that tests
+    which need an uncomputed store keep one. Costs a few seconds once per
+    session.
+    """
+    from phylodelta.precompute.pipeline import compute_pairs, ingest_trees
+
+    store = tmp_path_factory.mktemp("compared")
+    assert ingest_trees(datasets_dir=datasets_dir, store_dir=store) == 0
+    assert compute_pairs(store_dir=store) == 0
+    return store

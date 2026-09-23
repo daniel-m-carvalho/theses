@@ -113,7 +113,8 @@ def comparison_summary(
         shared_leaves=reconciliation.get("shared_leaves", 0),
         dropped_from_left=reconciliation.get("dropped_from_left", []),
         dropped_from_right=reconciliation.get("dropped_from_right", []),
-        same_species=reconciliation.get("same_species", True),
+        # None where species was not declared; see schemas.ComparisonSummary.
+        same_species=reconciliation.get("same_species"),
         caution=notes.get("caution"),
         values=values,
     )

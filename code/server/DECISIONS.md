@@ -2262,6 +2262,148 @@ quotas and retention are still deferred (§19.6) because they need a deployment 
 the isolate store is registered under `isolates-{species}`; the manifest records which raw file
 plays which role until the job can name it properly.
 
+## 24. The queue: a row, a conditional UPDATE, and a lease
+
+§23 left uploads inert — rows written, nothing computing. This is the other half.
+
+### 24.1 The database is the queue
+
+No Redis, no Celery, no RQ. §18 settled that a module owns its storage and that the whole backend
+still runs from `uv sync` and a directory; a broker is a second service to install, configure and
+keep alive, bought for a workload of a few jobs a minute. The database already holds the row,
+already has a transaction, and the same code runs unchanged on SQLite and PostgreSQL — which is the
+substitution §18 promised rather than one that only works on the engine we happened to pick.
+
+The comparison row **is** the queue entry. A separate `jobs` table was considered and rejected:
+there is exactly one job per comparison with the same lifetime, so a second table buys a join and a
+way for the two to disagree about status.
+
+It polls rather than listens. `LISTEN/NOTIFY` would be faster and would only work on PostgreSQL.
+
+### 24.2 Claiming is an UPDATE, not a SELECT
+
+The tempting version reads the oldest pending row and then marks it running. Between those two
+statements another worker reads the same row, and both compute the same comparison into the same
+directory. Instead:
+
+    UPDATE comparisons SET status='running', ... WHERE id=? AND status='pending'
+
+The database decides. Exactly one worker sees `rowcount == 1`. This needs no `SELECT FOR UPDATE`,
+which SQLite does not have — so one implementation is correct on both engines instead of correct on
+one and approximated on the other.
+
+Measured rather than argued: **eight worker processes racing for 200 jobs produced 200 claims, 200
+distinct, zero duplicates.** Work distributed unevenly (1 to 45 jobs per worker), which is what
+pull-based claiming is supposed to do.
+
+### 24.3 A lease, because workers die
+
+A worker killed mid-job — OOM, a container restart — leaves its comparison `running` with a
+heartbeat that stops advancing. Without recovery that row is unreachable by every worker forever,
+and the user polls a status that never moves.
+
+So a running job refreshes `heartbeat_at` every 30 s from a background thread, and any worker
+returns jobs whose heartbeat is older than the 300 s lease. The heartbeat is on a thread because the
+work is one long blocking call: correspondence on a 500k-node pair is tens of seconds with the GIL
+released, and a lease refreshed only between steps would expire inside the longest step — the one
+most likely to be running when a worker dies.
+
+The lease is deliberately much longer than the heartbeat interval. Too short and a slow but healthy
+job is stolen and run twice; too long and a dead worker's job waits. The costs are not symmetric —
+waiting is a delay, stealing is duplicated work against the same directory — so the margin is wide.
+
+`heartbeat` is scoped to the holder. A worker whose job was reclaimed while it was busy cannot take
+it back from whoever owns it now.
+
+**Retries are bounded** (3). A comparison that reliably kills its worker is a property of the job,
+not bad luck; past the limit it fails with that stated, rather than cycling forever and blocking the
+queue behind it.
+
+### 24.4 The worker runs the same pipeline as the CLI
+
+`ingest_tree_file` and `compute_pair` were **extracted** from the catalogue sweep, not reimplemented.
+An uploaded tree and a catalogue tree are the same kind of thing and must be canonicalised, stored
+and compared identically. A second ingestion path would be the same code with its own bugs, and the
+places they would hide — unary-root suppression, projection back onto stored indices — are exactly
+the ones that took longest to get right the first time.
+
+The evidence that it is genuinely the same path: an uploaded vibrio pair scores **RF 6,825** with
+**1 leaf dropped to reconcile**, which is the number and the quirk the pipeline has been verified
+against throughout.
+
+One deliberate divergence: no shared leaf labels raises `NotComparable`. The CLI sweeps every
+combination and most are not meant to be compared, so it skips; a worker computing a pair a user
+explicitly uploaded fails the job with the reason. Same condition, different meaning, so it is
+raised rather than returned — neither caller can forget it.
+
+Failure is a recorded status. Everything runs inside one `try`; anything raised becomes `failed`
+with the reason on the row. A worker that dies instead of recording is handled by the lease above.
+
+### 24.5 Uploaded typing data is keyed by dataset id, not species
+
+The catalogue registers isolate stores under a species name because there is exactly one of each. An
+uploaded table belongs to one uploaded tree, and two users may both upload salmonella. The dataset
+id is already unique and already owned, so it is the key. The `{species}` path parameter is really
+an isolate-set id; for catalogue data that id happens to be a species.
+
+### 24.6 Species is declared, or it is unknown — never assumed
+
+An uploaded tree has no filename convention to read a species from, so the upload takes optional
+`left_species` / `right_species`.
+
+When either is absent, `same_species` is **null**, not `true`. This matters more than it looks: the
+cross-species caution exists precisely because sequence types are numbered per species, so identical
+labels across species match no actual organism. Reporting two undeclared trees as "same species"
+would manufacture a reassurance nobody gave. Undeclared pairs get their own caution saying the check
+could not be made.
+
+Widening that field caught a real bug: `ComparisonSummary.same_species` was still `bool` and returned
+500 on the first undeclared pair.
+
+### 24.7 The pair listing now reads the database
+
+`/api/v1/datasets` used to enumerate every combination of an owner's trees and offer each as an
+available pair. That was right while the catalogue was the only source — every combination really
+had been computed — and became wrong the moment a comparison was something a user creates:
+
+* it emitted `sorted(left, right)` as the id, while an uploaded pair is stored in upload order, so
+  **a client following the listed id got a 404**;
+* it advertised comparisons nobody had asked for and nothing had computed;
+* it was quadratic in the owner's trees and loaded every tree's full label set per request.
+
+Now a pair is listed because a row says it exists, and the evidence — shared leaves, the caution — is
+read back from what the computation recorded rather than re-derived, so the listing cannot disagree
+with the result it points at. The sweep records rows too, so "a comparison exists" means one thing
+whichever route produced it.
+
+What this gives up: there is no longer a way to see that two owned trees *could* be compared. That
+is honest, because there is no endpoint to request such a comparison — uploads arrive as a pair.
+Comparing two already-owned datasets is recorded under *Deferred by decision*.
+
+### 24.8 Schema changes over a populated database
+
+`create_schema` was `create_all`, which creates missing tables and silently skips any table that
+exists, whatever shape it is in. §18 noted this would need to become a migration "once uploads
+exist". They now do, and the symptom arrived on cue: `no such column: comparisons.display_name`
+against a database holding somebody's uploaded trees.
+
+It now adds missing **columns** as well as missing tables, taking the value for existing rows from
+the model's own default so a migrated row and a freshly inserted one agree. Additive only: a
+renamed, retyped or dropped column is refused loudly, because guessing means silent data loss. That
+refusal is the marker for adopting Alembic rather than growing this function into it.
+
+### 24.9 Still open
+
+**Nothing cleans up.** A finished bundle's raw upload stays on disk, and a failed one keeps its
+trees. Retention is still deferred (§19.6) and now has a concrete first job: delete the upload
+directory once a comparison is `ready`.
+
+**Only `rf` runs.** The worker computes `DEFAULT_METRICS`; which metrics an uploaded pair should get
+— and whether the uploader chooses — is not decided.
+
+**Progress is binary.** A comparison is pending, running or ready; there is no percentage. For a
+500k-node pair that is minutes of "running" with nothing to show.
+
 ## Findings carried forward
 
 Observations made during milestone 1 that constrain later work.
@@ -2400,6 +2542,12 @@ inside functions is where most of the cut is.
 The `§n` references make this safe: the reasoning has somewhere to live that is not the source file,
 so cutting a comment loses nothing. That is what this document is for, and the pass is partly a test
 of whether it has been doing its job.
+
+**Comparing two datasets the user already owns** — `POST /api/v1/comparisons` takes a bundle of
+files; there is no way to say "compare these two ids". A user who uploads pair A and pair B cannot
+compare A's left tree against B's. §24.7 removed the listing that implied otherwise, since it
+advertised pairs nobody could request. The pieces are all there — `compute_pair` takes two stored
+ids — so this is an endpoint and a queue entry, not new machinery.
 
 **Other deferrals** carried from earlier sections: the succinct representation (§2.1, after
 correctness); the subprocess metric kind (§3.5, contract defined, not wired); a crosswalk between

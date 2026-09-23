@@ -61,6 +61,17 @@ def upload_comparison(
         default=None,
         description="What to call this comparison. Defaults to the two filenames.",
     ),
+    left_species: str | None = Form(
+        default=None,
+        description=(
+            "What organism the left tree is. Optional. Given for both trees, "
+            "it is what lets the result say whether matching leaf labels mean "
+            "the same organisms — sequence types are numbered per species, so "
+            "across species an identical label is a coincidence. Left out, the "
+            "result says species was not declared rather than assuming."
+        ),
+    ),
+    right_species: str | None = Form(default=None, description="As left_species."),
 ) -> UploadAccepted:
     """Receive a bundle and record it as pending.
 
@@ -81,7 +92,12 @@ def upload_comparison(
     }
 
     try:
-        bundle = uploads.accept(sources, display_name=(name or "").strip())
+        bundle = uploads.accept(
+            sources,
+            display_name=(name or "").strip(),
+            left_species=(left_species or "").strip(),
+            right_species=(right_species or "").strip(),
+        )
     except uploads.UploadRejected as rejected:
         raise errors.bad_request(
             "upload_rejected",

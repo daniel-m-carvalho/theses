@@ -36,6 +36,36 @@ services:
       retries: 3
       start_period: 10s
 
+  # The other half of the 202. The API accepts an upload and records it as
+  # pending; nothing computes on the request path, because ingesting a
+  # 500k-node tree and building its correspondence is seconds to minutes.
+  #
+  # A separate service rather than a thread inside the API, for two reasons.
+  # A comparison saturates every core it is given, and sharing a process with
+  # the API would make request latency depend on whatever job is running. And
+  # the two scale differently: uploads are cheap and bursty, comparisons are
+  # expensive and serial, so `--scale phylodelta-worker=N` is the knob that
+  # matters. Claiming is safe with any number of workers (db/jobs.py).
+  phylodelta-worker:
+    image: phylodelta-service:local
+    build:
+      context: ./code/server
+    restart: unless-stopped
+    command: ["uv", "run", "phylodelta", "worker"]
+    environment:
+      PHYLODELTA_STORE: /data/store
+      PHYLODELTA_DATASETS: /data/datasets
+      PHYLODELTA_THREADS: "0"
+    volumes:
+      # The same store the API serves from, read-write: this is the process
+      # that writes it. Both containers must agree on the path, since the
+      # database rows hold store-relative paths.
+      - phylodelta-data:/data/store
+      - ./datasets:/data/datasets:ro
+    depends_on:
+      phylodelta-service:
+        condition: service_healthy
+
   phylodelta-demo:
     build:
       # The workspace root, not the demo directory: the demo consumes the

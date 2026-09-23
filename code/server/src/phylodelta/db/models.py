@@ -24,7 +24,7 @@ from __future__ import annotations
 import enum
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, String, Text
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -133,6 +133,31 @@ class Comparison(Base):
         DateTime(timezone=True), nullable=True
     )
 
+    # --- job state -------------------------------------------------------
+    # A comparison is also the queue entry for computing it. A separate jobs
+    # table was considered and rejected: there is exactly one job per
+    # comparison and it has the same lifetime, so a second table would add a
+    # join and a way for the two to disagree about status.
+
+    #: How many times a worker has claimed this. Bounded, so a job that
+    #: crashes the worker every time fails honestly instead of cycling.
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+
+    #: Which worker holds it. Diagnostic — the claim is decided by the atomic
+    #: UPDATE, not by this column.
+    worker: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    #: Refreshed while the job runs. A `running` row whose heartbeat has gone
+    #: stale is one whose worker died: without this, a crash mid-job would
+    #: leave the comparison `running` forever and unreachable by any worker.
+    heartbeat_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     left: Mapped[Dataset] = relationship(
         foreign_keys=[left_id], back_populates="comparisons_left"
     )
@@ -140,5 +165,8 @@ class Comparison(Base):
 
     __table_args__ = (
         Index("ix_comparisons_owner", "owner_id", "status"),
+        # The worker's own query: the oldest pending job, and stale running
+        # ones to reclaim.
+        Index("ix_comparisons_queue", "status", "created_at"),
         Index("ix_comparisons_pair", "left_id", "right_id"),
     )

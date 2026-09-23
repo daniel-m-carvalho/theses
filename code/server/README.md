@@ -26,7 +26,13 @@ What that buys, measured on the real data:
 uv sync                        # create .venv, install deps (Python 3.12)
 uv run phylodelta build-all      # datasets/ -> store/  (a few minutes, once)
 uv run uvicorn phylodelta.api.app:app --reload
+uv run phylodelta worker         # in a second terminal, to process uploads
 ```
+
+The worker is only needed for **uploaded** comparisons. `build-all` precomputes the catalogue and
+the API serves it without one; an upload, though, is accepted and left `pending` until a worker
+picks it up, so without one nothing ever leaves that state. `GET /api/v1/health` reports the queue
+depth, which is how that looks from outside.
 
 ### The native extension is optional
 
@@ -46,6 +52,7 @@ Then <http://127.0.0.1:8000/docs> for the generated OpenAPI contract.
 | `phylodelta compute-pairs` | `store/trees/` | `store/pairs/` | ~13 s per pair |
 | `phylodelta ingest-isolates` | `datasets/isolated_data/*.tsv` | `store/isolates/` | ~5 s per species |
 | `phylodelta list-metrics` | — | — | — |
+| `phylodelta worker` | the queue | `store/trees/`, `store/pairs/` | runs until stopped |
 
 `store/` is generated and gitignored; it is always rebuildable from `datasets/`.
 

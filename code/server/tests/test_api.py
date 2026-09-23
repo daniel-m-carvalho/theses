@@ -7,6 +7,24 @@ from fastapi.testclient import TestClient
 
 
 @pytest.fixture()
+def compared_client(compared_store, monkeypatch):
+    """A client over a store where the pairs have actually been computed."""
+    from phylodelta import config, db
+    from phylodelta.api.app import create_app
+    from phylodelta.metrics import registry_pairs
+    from phylodelta.trees import registry
+
+    db.reset()
+    monkeypatch.setattr(config, "STORE_DIR", compared_store)
+    monkeypatch.setattr(config, "TREES_DIR", compared_store / "trees")
+    monkeypatch.setattr(config, "PAIRS_DIR", compared_store / "pairs")
+    monkeypatch.setattr(config, "ISOLATES_DIR", compared_store / "isolates")
+    registry.reset_cache()
+    registry_pairs.reset_cache()
+    yield TestClient(create_app())
+
+
+@pytest.fixture()
 def client(real_store, monkeypatch):
     from phylodelta import config, db
     from phylodelta.api import routes_meta
@@ -38,34 +56,47 @@ def test_datasets_lists_the_ingested_trees(client):
     assert by_id["vibrio-upgma"]["method"] == "upgma"
 
 
-def test_pairs_are_offered_on_measured_label_overlap(client):
-    """Any two trees sharing labels are offered, across species included."""
-    pairs = {p["id"]: p for p in client.get("/api/v1/datasets").json()["pairs"]}
+def test_the_listing_shows_comparisons_that_exist(compared_client):
+    """What is listed is what has been computed, not what could be.
+
+    This used to enumerate every combination of the owner's trees and offer
+    each as an available pair, which was right while the catalogue was the only
+    source and wrong as soon as a comparison became something a user creates:
+    the id it produced was `sorted(left, right)`, so for an uploaded pair
+    stored in upload order a client following it got a 404.
+    """
+    pairs = {p["id"]: p for p in compared_client.get("/api/v1/datasets").json()["pairs"]}
     assert set(pairs) == {
         "vibrio-nj__vibrio-upgma",
         "clostridium-upgma__vibrio-nj",
         "clostridium-upgma__vibrio-upgma",
     }
-    assert pairs["vibrio-nj__vibrio-upgma"]["metrics"] == []  # comparable, not yet computed
+    assert all(p["status"] == "ready" for p in pairs.values())
 
 
-def test_same_species_pair_carries_no_caution(client):
-    pairs = {p["id"]: p for p in client.get("/api/v1/datasets").json()["pairs"]}
+def test_a_listed_pair_reports_what_was_actually_computed(compared_client):
+    """The evidence is read back from the result, not re-derived from the trees.
+
+    So the listing cannot disagree with the comparison it points at — and a
+    request does not pay for loading every tree's label set to answer it.
+    """
+    pairs = {p["id"]: p for p in compared_client.get("/api/v1/datasets").json()["pairs"]}
     same = pairs["vibrio-nj__vibrio-upgma"]
     assert same["same_species"] is True
     assert same["caution"] is None
     assert same["species"] == "vibrio"
     assert same["shared_leaves"] == 17_645
     assert same["shared_fraction"] == 1.0
+    assert same["metrics"] == ["rf"]
 
 
-def test_cross_species_pair_is_offered_but_flagged(client):
+def test_cross_species_pair_is_offered_but_flagged(compared_client):
     """Not blocked -- whether such a comparison is worth making is the user's call.
 
     But sequence types are numbered per species, so ~99% of labels collide
     while sharing no organism. The server states that rather than deciding it.
     """
-    pairs = {p["id"]: p for p in client.get("/api/v1/datasets").json()["pairs"]}
+    pairs = {p["id"]: p for p in compared_client.get("/api/v1/datasets").json()["pairs"]}
     cross = pairs["clostridium-upgma__vibrio-upgma"]
     assert cross["same_species"] is False
     assert cross["species"] == "clostridium/vibrio"
@@ -73,6 +104,17 @@ def test_cross_species_pair_is_offered_but_flagged(client):
     assert cross["shared_fraction"] > 0.99
     assert cross["caution"] is not None
     assert "not the same organisms" in cross["caution"]
+
+
+def test_an_uncomputed_pair_is_not_listed(client):
+    """Absent, rather than listed with an empty metric list.
+
+    Two trees that share labels *could* be compared, but there is no way to ask
+    for that comparison — uploads arrive as a pair. Advertising it would offer
+    a capability that does not exist.
+    """
+    pairs = {p["id"]: p for p in client.get("/api/v1/datasets").json()["pairs"]}
+    assert pairs == {}
 
 
 def test_openapi_document_is_generated(client):
@@ -88,17 +130,18 @@ def test_metrics_endpoint_lists_registered_plugins(client):
     assert by_name["rf"]["capabilities"]["per_clade"] is True
 
 
-def test_a_pair_lists_its_computed_metrics(client, real_store):
-    """A pair with nothing computed reports an empty list, not an absent one."""
+def test_a_pair_appears_once_it_is_computed(client, real_store):
+    """Computing a pair is what makes it exist, and the listing follows."""
     from phylodelta.precompute.pipeline import compute_pairs
 
     pair_id = "vibrio-nj__vibrio-upgma"
     before = {p["id"]: p for p in client.get("/api/v1/datasets").json()["pairs"]}
-    assert before[pair_id]["metrics"] == []
+    assert pair_id not in before
 
     assert compute_pairs(store_dir=real_store, metrics=["rf"], only=pair_id) == 0
     after = {p["id"]: p for p in client.get("/api/v1/datasets").json()["pairs"]}
     assert after[pair_id]["metrics"] == ["rf"]
+    assert after[pair_id]["status"] == "ready"
 
 
 # --- trees and slicing -----------------------------------------------------

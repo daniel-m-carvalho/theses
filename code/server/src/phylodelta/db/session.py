@@ -89,13 +89,74 @@ def engine() -> Engine:
 
 
 def create_schema() -> None:
-    """Create any missing tables.
+    """Bring the database up to the current schema.
 
-    Enough while the schema is young and the data rebuildable. Once uploads
-    exist there is user data to preserve across a change, and this needs to
-    become a migration tool rather than a create-if-absent (§19.2).
+    Creates missing tables, then adds missing **columns** to tables that
+    already exist. `create_all` alone does only the first: it skips any table
+    that is present, whatever shape it is in. That was fine while every store
+    was rebuildable, and stopped being fine when uploads started putting user
+    data in there — the symptom was `no such column: comparisons.display_name`
+    against a database holding trees somebody had uploaded.
+
+    **This handles additive changes only**, which is what the schema has needed
+    so far. A renamed, retyped or dropped column is refused loudly rather than
+    guessed at, because guessing means silent data loss. When one is needed,
+    that is the point to adopt a real migration tool (Alembic) rather than
+    grow this function into one.
     """
-    Base.metadata.create_all(engine())
+    made = engine()
+    Base.metadata.create_all(made)
+    _add_missing_columns(made, Base.metadata)
+
+
+def _add_missing_columns(made: Engine, metadata) -> None:
+    """ALTER TABLE ... ADD COLUMN for anything the model has and the table does not.
+
+    Takes its metadata rather than reaching for `Base.metadata`, so this can be
+    exercised against a throwaway schema — a test that added a column to the
+    real model to check the refusal path would leave it there for every test
+    that followed.
+    """
+    from sqlalchemy import inspect, text
+    from sqlalchemy.schema import CreateColumn
+
+    inspector = inspect(made)
+    existing_tables = set(inspector.get_table_names())
+
+    for table in metadata.sorted_tables:
+        if table.name not in existing_tables:
+            continue
+        present = {c["name"] for c in inspector.get_columns(table.name)}
+        for column in table.columns:
+            if column.name in present:
+                continue
+            if column.primary_key:
+                # Cannot be added to a populated table in any engine, and a new
+                # primary key is never an additive change anyway.
+                raise RuntimeError(
+                    f"{table.name}.{column.name} is a new primary key; this "
+                    "needs a real migration, not an ADD COLUMN."
+                )
+
+            spec = CreateColumn(column).compile(made).string
+            # A NOT NULL column needs something for the rows already there.
+            # Taking it from the model's own default keeps the migrated value
+            # and the value a fresh insert would get identical.
+            if not column.nullable and "DEFAULT" not in spec.upper():
+                fallback = getattr(column.default, "arg", None)
+                if fallback is None:
+                    raise RuntimeError(
+                        f"{table.name}.{column.name} is NOT NULL with no default; "
+                        "existing rows have no value for it. Give it a default "
+                        "or make it nullable."
+                    )
+                literal = (
+                    f"'{fallback}'" if isinstance(fallback, str) else repr(fallback)
+                )
+                spec = f"{spec} DEFAULT {literal}"
+
+            with made.begin() as connection:
+                connection.execute(text(f"ALTER TABLE {table.name} ADD COLUMN {spec}"))
 
 
 @contextmanager

@@ -24,6 +24,14 @@ class HealthResponse(BaseModel):
     status: str = Field(examples=["ok"])
     version: str
     store_ready: bool = Field(description="False until the precompute CLI has been run.")
+    queue: dict[str, int] = Field(
+        default_factory=dict,
+        description=(
+            "How many comparisons sit in each status. Pending work with "
+            "nothing running usually means no worker is attached."
+        ),
+        examples=[{"pending": 2, "running": 1, "ready": 40, "failed": 0}],
+    )
 
 
 class TreeSummary(BaseModel):
@@ -55,8 +63,17 @@ class PairSummary(BaseModel):
     left: str
     right: str
     #: The species of both trees when they agree, otherwise "left/right".
+    #: Empty when neither tree declared one.
     species: str
-    same_species: bool = True
+    #: Null when either tree did not declare a species. Not `true`: "we did not
+    #: check" must not read as "we checked and they match", because the whole
+    #: point of the caution below is that identical labels across species are a
+    #: coincidence.
+    same_species: bool | None = True
+    #: pending | running | ready | failed. A pair appears here as soon as it is
+    #: uploaded, so a client can show it before it has been computed; only a
+    #: `ready` pair can be read from the comparison endpoints.
+    status: str = "ready"
     #: How the two label spaces were related. "identity" means leaf labels were
     #: compared as strings.
     label_match: str = "identity"
@@ -258,7 +275,9 @@ class ComparisonSummary(BaseModel):
         description="Leaf labels present only in the left tree, so excluded from the metric."
     )
     dropped_from_right: list[str] = Field(default_factory=list)
-    same_species: bool = True
+    #: Null when either tree did not declare a species — "not checked", which
+    #: must not be reported as "checked and matching".
+    same_species: bool | None = True
     caution: str | None = Field(
         None,
         description=(
