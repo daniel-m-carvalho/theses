@@ -64,6 +64,15 @@ const VIEWER = {
  * black bar. Deriving the two from each other keeps them in step if either is
  * retuned.
  */
+/**
+ * Hit radius for a collapsed clade, in graph units.
+ *
+ * Chosen against the wedge: the triangle is `length` (14) pixels wide, and the
+ * marker has to be at least that to be aimed at. Larger would start swallowing
+ * clicks meant for the neighbouring row.
+ */
+const CLADE_HIT_SIZE = 14;
+
 const CLADE_SHAPE = {
   enabled: true,
   // Black, as in the library's own demo: the wedge is structure, and colouring
@@ -116,7 +125,24 @@ const CONFIG: Config = {
     legend: true,
     legendLabels: ["identical", "diverged"],
   },
-  link: true,
+  /**
+   * Panels are NOT linked.
+   *
+   * Linking makes a click highlight the "corresponding" node in the other
+   * panel, keyed by `keyOf`. With `keyBy: "name"` an unnamed internal node
+   * keys to the empty string — and every clade in a slice is unnamed, because
+   * the source Newick labels them `_` and we blank it. So `highlightByKey("")`
+   * matched the first empty-named node on the other side, which is its root:
+   * clicking any clade tracked to the other tree's root, every time.
+   *
+   * Supplying a correspondence map would fix the aim, but not the idea. A
+   * clade's counterpart is a best-overlap match, and following it on every
+   * click moves the view the user is comparing against, using an
+   * approximation they did not ask for. Locating something in the other tree
+   * is a deliberate act, so it lives in the menu — and only for leaves, where
+   * the match is exact (§ the menu's "Find this leaf in the other tree").
+   */
+  link: false,
 };
 
 export function ComparisonView({
@@ -257,6 +283,23 @@ export function ComparisonView({
 
     const unsubscribe = built.panels.map((panel, index) => {
       const side = index as 0 | 1;
+      /**
+       * Make the whole wedge clickable.
+       *
+       * The layout gives a collapsed clade a marker of 8 graph units, which at
+       * the zoom a whole tree fits into is a few screen pixels — far smaller
+       * than the 14px triangle drawn over it. Aiming at the triangle therefore
+       * missed: the click fell on empty stage, and "select a clade, then
+       * right-click to expand it" only worked once you had zoomed in.
+       *
+       * The marker is already transparent (the clade presenter hands its job
+       * to the wedge), so enlarging it is invisible — it only widens the
+       * target to match what the eye is aiming at.
+       */
+      const restoreSize = panel.viewer.addNodeReducer((_node, data) =>
+        data.collapsed ? { ...data, size: CLADE_HIT_SIZE } : data,
+      );
+
       // Once now, because the first render already happened inside
       // createComparison, and again on every later one: pruning and re-layout
       // mint new keys.
@@ -274,6 +317,8 @@ export function ComparisonView({
           setMenu({ side, at: { x, y }, storedId: lastSelected.current[side] ?? undefined });
         }),
         // A left click on empty canvas is the deliberate "never mind".
+        // Measured: Sigma emits `clickStage` only when no node was hit, so
+        // this does not fire on the click that made a selection.
         panel.viewer.events.on("clickStage", () => {
           lastSelected.current[side] = null;
           setSelected((current) => {
@@ -283,7 +328,10 @@ export function ComparisonView({
           });
         }),
       ];
-      return () => off.forEach((fn) => fn());
+      return () => {
+        restoreSize();
+        off.forEach((fn) => fn());
+      };
     });
 
     return () => {

@@ -111,10 +111,16 @@ export function useSide(
   initialPath: number[] = [],
   autoBudget: number = DEFAULT_BUDGET,
 ): [SideState, SideActions] {
-  // Seeded once, from the URL. Not kept in sync afterwards: the URL follows
-  // navigation, not the other way round, or every expansion would round-trip
-  // through the address bar.
   const [path, setPath] = useState<number[]>(initialPath);
+
+  // Follow the URL when it changes underneath us — a Back press, or a link
+  // pasted into the bar. Guarded by a content comparison, because the URL is
+  // also written *from* this state: without that, every navigation would
+  // round-trip through the address bar and set the state it came from.
+  const wanted = initialPath.join(",");
+  useEffect(() => {
+    setPath((current) => (current.join(",") === wanted ? current : wanted ? wanted.split(",").map(Number) : []));
+  }, [wanted]);
   const [budget, setBudget] = useState(autoBudget);
   // Follows the viewport until the user overrides it with expand/collapse all.
   const [overridden, setOverridden] = useState(false);
