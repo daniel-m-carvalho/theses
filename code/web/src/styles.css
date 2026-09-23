@@ -8,7 +8,11 @@
  */
 
 :root {
-  color-scheme: light dark;
+  /* Light only. The viewer draws branches and the divergence gradient onto a
+     canvas with its own palette, and those were chosen against a light
+     background; following the operating system into dark mode would leave the
+     chrome dark and the trees unchanged. */
+  color-scheme: light;
   --bg: #fbfbfd;
   --surface: #ffffff;
   --line: #e2e4ea;
@@ -20,21 +24,6 @@
   --danger: #a11b1b;
   --radius: 10px;
   --shadow: 0 8px 28px rgb(16 18 25 / 12%);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #121418;
-    --surface: #1a1d23;
-    --line: #2b2f38;
-    --ink: #e9ebf0;
-    --muted: #9aa1b1;
-    --accent: #7aa2ff;
-    --warn: #ffcf70;
-    --warn-bg: #3a2f14;
-    --danger: #ff8f8f;
-    --shadow: 0 8px 28px rgb(0 0 0 / 45%);
-  }
 }
 
 * { box-sizing: border-box; }
