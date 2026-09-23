@@ -26,6 +26,13 @@ export interface SliceTree {
   byStoredId: Map<number, NewickNode>;
   /** Index into the slice arrays, by stored id — for comparison lookups. */
   indexOfStoredId: Map<number, number>;
+  /**
+   * Stored id by Sigma node key (the node's `name`).
+   *
+   * The library's comparison operator asks for a value by key, not by node, so
+   * the gradient needs this direction too.
+   */
+  storedIdOfName: Map<string, number>;
   truncated: Set<number>;
 }
 
@@ -56,6 +63,7 @@ export function treeFromSlice(slice: TreeSlice): SliceTree {
   const byStoredId = new Map<number, NewickNode>();
   const indexOfStoredId = new Map<number, number>();
   const truncatedIds = new Set<number>();
+  const storedIdOfName = new Map<string, number>();
 
   const taken = new Set<string>();
   const nodes: NewickNode[] = new Array(count);
@@ -90,6 +98,7 @@ export function treeFromSlice(slice: TreeSlice): SliceTree {
     }
 
     nodes[k] = node;
+    storedIdOfName.set(name, id[k]);
     storedId.set(node, id[k]);
     trueLeaves.set(node, true_leaf_count[k]);
     byStoredId.set(id[k], node);
@@ -122,6 +131,7 @@ export function treeFromSlice(slice: TreeSlice): SliceTree {
     trueLeafCountOf: (node) => trueLeaves.get(resolve(node)) ?? trueLeaves.get(node),
     byStoredId,
     indexOfStoredId,
+    storedIdOfName,
     truncated: truncatedIds,
   };
 }
