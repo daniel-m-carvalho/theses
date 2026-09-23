@@ -10,7 +10,7 @@ import realSlice from "../tree/__fixtures__/slice.json";
 import type { TreeSlice } from "../api/types";
 import { gradientFrom } from "../tree/comparisonValues";
 import { treeFromSlice } from "../tree/fromSlice";
-import { buildMenu, menuTitle, type PendingMenu } from "./menuItems";
+import { buildMenu, jumpTargetFor, menuTitle, type PendingMenu } from "./menuItems";
 import { DEFAULT_BUDGET, EXPAND_ALL_LIMIT, type SideActions, type SideState } from "./useSide";
 
 const slice = realSlice as unknown as TreeSlice;
@@ -90,41 +90,55 @@ describe("right-clicking a node", () => {
     expect(by(items, "Expand this clade").onSelect).toBeUndefined();
   });
 
-  it("jumps to the matching clade in the OTHER tree, not this one", () => {
-    // The whole reason there are two panels. The correspondence was computed
-    // once on the server, so this is a lookup.
+  it("locates a LEAF in the other tree, and sends only that panel", () => {
+    // Why the two panels exist. A leaf is matched by its label — the same
+    // sequence type on both sides — so this is exact.
     const left = sideOf();
     const right = sideOf({ treeId: "vibrio-upgma" });
     const leftAct = actions();
     const rightAct = actions();
 
-    const storedId = [...left.tree!.indexOfStoredId.keys()].find(
-      (id) => left.gradient.correspondingTo(id) !== undefined,
+    const leaf = [...left.tree!.leaves].find(
+      (id) => jumpTargetFor(left, id) !== undefined,
     );
-    expect(storedId).toBeDefined();
-    const partner = left.gradient.correspondingTo(storedId!)!;
+    expect(leaf).toBeDefined();
 
-    const items = buildMenu({ side: 0, at, storedId }, [left, right], [leftAct, rightAct]);
-    const jump = by(items, "Show the matching clade on the other side");
+    const items = buildMenu({ side: 0, at, storedId: leaf }, [left, right], [leftAct, rightAct]);
+    const jump = by(items, "Find this leaf in the other tree");
     expect(jump.disabledBecause).toBeUndefined();
-    expect(jump.detail).toContain("vibrio-upgma");
 
     jump.onSelect!();
-    expect(rightAct.calls).toEqual([`focus:${partner}`]);
+    expect(rightAct.calls).toHaveLength(1);
     expect(leftAct.calls).toEqual([]);
   });
 
-  it("says so when a clade has no counterpart, rather than hiding the option", () => {
-    const left = sideOf({
-      gradient: { similarityOf: () => undefined, correspondingTo: () => undefined },
-    });
+  it("shows the leaf's whole clade, not the bare leaf", () => {
+    // Rooting the other panel at a single leaf leaves one dot on screen and
+    // throws away the context you were comparing against.
+    const left = sideOf();
+    const leaf = [...left.tree!.leaves].find(
+      (id) => left.tree!.parentOfStoredId.has(id) &&
+        left.gradient.correspondingTo(left.tree!.parentOfStoredId.get(id)!) !== undefined,
+    )!;
+    const parent = left.tree!.parentOfStoredId.get(leaf)!;
+
+    expect(jumpTargetFor(left, leaf)).toBe(left.gradient.correspondingTo(parent));
+    expect(jumpTargetFor(left, leaf)).not.toBe(left.gradient.correspondingTo(leaf));
+  });
+
+  it("refuses to locate a clade, because that match is only an approximation", () => {
+    // A clade is matched by best leaf overlap, so the "corresponding" clade may
+    // share most of its leaves or almost none. Offering the jump would present
+    // a guess as a location — and it is worst exactly where the trees disagree,
+    // which is the reason to be looking.
+    const left = sideOf();
     const items = buildMenu(
       { side: 0, at, storedId: aWedge(left) },
       [left, sideOf()],
       [actions(), actions()],
     );
-    const jump = by(items, "Show the matching clade on the other side");
-    expect(jump.disabledBecause).toMatch(/no corresponding clade/);
+    const jump = by(items, "Find this leaf in the other tree");
+    expect(jump.disabledBecause).toMatch(/only leaves can be located/);
     expect(jump.onSelect).toBeUndefined();
   });
 
@@ -143,7 +157,7 @@ describe("right-clicking empty canvas", () => {
   it("offers no node actions, because there is no node", () => {
     const labels = items().map((item) => item.label);
     expect(labels).not.toContain("Expand this clade");
-    expect(labels).not.toContain("Show the matching clade on the other side");
+    expect(labels).not.toContain("Find this leaf in the other tree");
     expect(labels).toContain("Expand all");
     expect(labels).toContain("Collapse all");
   });

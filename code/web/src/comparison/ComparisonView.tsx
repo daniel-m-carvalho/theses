@@ -100,7 +100,12 @@ const CONFIG: Config = {
     mode: "gradient",
     keyBy: "name",
     colorEdges: true,
-    colorNodes: true,
+    // Edges only. The clade presenter already hides a collapsed node's circular
+    // marker so the wedge stands alone, and colouring markers put the ball
+    // straight back — every clade showed a coloured dot beside its triangle.
+    // The gradient reads on the branches, which is where a divergence between
+    // two topologies actually lives.
+    colorNodes: false,
     legend: true,
     legendLabels: ["identical", "diverged"],
   },

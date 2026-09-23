@@ -45,6 +45,27 @@ export function menuTitle(menu: PendingMenu, states: [SideState, SideState]): st
   return leaves && leaves > 1 ? `${named} — ${leaves.toLocaleString()} leaves` : named;
 }
 
+/**
+ * Where to send the other panel when a leaf is located in it.
+ *
+ * Its **enclosing clade**, not the leaf itself. Rooting a panel at a single
+ * leaf is technically what was asked for and useless in practice: the panel
+ * became one dot, with every bit of the context you were comparing against
+ * gone. Rooting at the corresponding node of the leaf's parent shows the leaf
+ * among its neighbours, which is what "find it in the other tree" means to
+ * someone looking at two trees.
+ */
+export function jumpTargetFor(side: SideState, leafStoredId: number): number | undefined {
+  const parent = side.tree?.parentOfStoredId.get(leafStoredId);
+  if (parent !== undefined) {
+    const clade = side.gradient.correspondingTo(parent);
+    if (clade !== undefined) return clade;
+  }
+  // No parent in this slice, or the parent has no counterpart: fall back to
+  // the leaf's own match rather than offering nothing.
+  return side.gradient.correspondingTo(leafStoredId);
+}
+
 export function buildMenu(
   menu: PendingMenu,
   states: [SideState, SideState],
@@ -79,15 +100,23 @@ export function buildMenu(
         !node || leaves <= 1 || alreadyHere ? undefined : () => act.focus(storedId),
     });
 
-    // The correspondence is what a comparison is for: the same clade, located
-    // in the other tree. Computed once per pair on the server, so this is a
-    // lookup rather than a search.
-    const partner = here.gradient.correspondingTo(storedId);
+    // Only for a leaf. A leaf is matched by its label, which is exact — the
+    // same sequence type in both trees. A clade is matched by best overlap,
+    // which is an approximation: the corresponding "clade" may share most of
+    // its leaves or almost none, and offering to jump to it presents a guess
+    // as a location. Where the two trees disagree — which is the whole reason
+    // to look — the guess is worst.
+    const isLeaf = here.tree.leaves.has(storedId);
+    const partner = isLeaf ? jumpTargetFor(here, storedId) : undefined;
     items.push({
-      label: "Show the matching clade on the other side",
-      detail: partner !== undefined ? `node ${partner} in ${there.treeId}` : undefined,
-      disabledBecause:
-        partner === undefined ? "no corresponding clade in the other tree" : undefined,
+      label: "Find this leaf in the other tree",
+      detail:
+        partner !== undefined ? `shows its clade in ${there.treeId}` : undefined,
+      disabledBecause: !isLeaf
+        ? "only leaves can be located exactly; a clade is matched by overlap"
+        : partner === undefined
+          ? "this leaf is not in the other tree"
+          : undefined,
       onSelect: partner === undefined ? undefined : () => actThere.focus(partner),
     });
   }

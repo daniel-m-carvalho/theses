@@ -27,6 +27,16 @@ export interface SliceTree {
   /** Index into the slice arrays, by stored id — for comparison lookups. */
   indexOfStoredId: Map<number, number>;
   truncated: Set<number>;
+  /** Parent of a node, by stored id, within this slice. Absent at the root. */
+  parentOfStoredId: Map<number, number>;
+  /**
+   * Tips that are actual leaves — not clades folded into a wedge.
+   *
+   * The distinction matters for cross-tree jumps: a leaf is matched by its
+   * label, which is exact, while a clade is matched by best overlap, which is
+   * an approximation and can be one in name only.
+   */
+  leaves: Set<number>;
 }
 
 /**
@@ -61,6 +71,8 @@ export function treeFromSlice(slice: TreeSlice): SliceTree {
   const byStoredId = new Map<number, NewickNode>();
   const indexOfStoredId = new Map<number, number>();
   const truncatedIds = new Set<number>();
+  const parentOfStoredId = new Map<number, number>();
+  const hasChildren = new Set<number>();
 
   const nodes: NewickNode[] = new Array(count);
   for (let k = 0; k < count; k += 1) {
@@ -107,6 +119,8 @@ export function treeFromSlice(slice: TreeSlice): SliceTree {
     }
     const father = nodes[at];
     (father.branchset ??= []).push(nodes[k]);
+    parentOfStoredId.set(id[k], id[at]);
+    hasChildren.add(id[at]);
   }
   if (!root) throw new Error("slice has no root");
 
@@ -121,5 +135,9 @@ export function treeFromSlice(slice: TreeSlice): SliceTree {
     byStoredId,
     indexOfStoredId,
     truncated: truncatedIds,
+    parentOfStoredId,
+    leaves: new Set(
+      id.filter((storedId) => !hasChildren.has(storedId) && !truncatedIds.has(storedId)),
+    ),
   };
 }
