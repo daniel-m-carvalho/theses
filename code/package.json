@@ -8,14 +8,16 @@
   "workspaces": [
     "lib",
     "lib_demo",
+    "web",
     "bench"
   ],
   "scripts": {
-    "start": "npm start --workspace lib_demo",
-    "build": "npm run build --workspace lib_demo",
+    "start": "npm start --workspace web",
+    "build": "npm run build --workspace web",
     "preview": "npm run preview --workspace lib_demo",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm test --workspaces --if-present",
-    "check": "npm run check --workspaces --if-present"
+    "check": "npm run check --workspaces --if-present",
+    "start:demo": "npm start --workspace lib_demo"
   }
 }

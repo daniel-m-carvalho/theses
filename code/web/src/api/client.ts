@@ -1,0 +1,106 @@
+/**
+ * Talking to PhyloDelta.
+ *
+ * One place that knows URLs and error handling, so components deal in values
+ * and failures rather than in fetch. Every non-2xx response carries
+ * `{detail, code, hint}`; `ApiError` preserves `code`, because that is the
+ * stable thing to branch on — `detail` may be reworded.
+ */
+
+import type {
+  ApiErrorBody,
+  ComparisonStatus,
+  ComparisonSummary,
+  DatasetsResponse,
+  TreeSlice,
+  UploadAccepted,
+  WhoAmI,
+} from "./types";
+
+const BASE = "/api/v1";
+
+export class ApiError extends Error {
+  readonly status: number;
+  readonly code: string;
+  readonly hint: string | null;
+
+  constructor(status: number, body: Partial<ApiErrorBody>) {
+    super(body.detail ?? `Request failed (${status})`);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = body.code ?? "unknown";
+    this.hint = body.hint ?? null;
+  }
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${BASE}${path}`, init);
+  if (!response.ok) {
+    // A failure may not be JSON — a proxy timing out, for instance — so the
+    // parse is guarded rather than assumed.
+    let body: Partial<ApiErrorBody> = {};
+    try {
+      body = await response.json();
+    } catch {
+      body = { detail: response.statusText };
+    }
+    throw new ApiError(response.status, body);
+  }
+  return (await response.json()) as T;
+}
+
+export const api = {
+  me: () => request<WhoAmI>("/me"),
+
+  datasets: () => request<DatasetsResponse>("/datasets"),
+
+  comparison: (pairId: string, metric = "rf") =>
+    request<ComparisonSummary>(
+      `/comparisons/${encodeURIComponent(pairId)}?metric=${encodeURIComponent(metric)}`,
+    ),
+
+  status: (comparisonId: string) =>
+    request<ComparisonStatus>(
+      `/comparisons/${encodeURIComponent(comparisonId)}/status`,
+    ),
+
+  /**
+   * A budget-limited view of a subtree, with comparison values in the same
+   * response when `compare` is given.
+   *
+   * This is the call the whole design exists for: the client never receives
+   * the full tree, only as much of it as the budget allows, and asks again
+   * with a different `root` to go deeper.
+   */
+  slice: (
+    treeId: string,
+    options: {
+      root?: number;
+      budget?: number;
+      compare?: string;
+      metric?: string;
+      order?: "size" | "difference";
+      signal?: AbortSignal;
+    } = {},
+  ) => {
+    const query = new URLSearchParams();
+    if (options.root !== undefined) query.set("root", String(options.root));
+    query.set("budget", String(options.budget ?? 500));
+    if (options.compare) query.set("compare", options.compare);
+    if (options.metric) query.set("metric", options.metric);
+    if (options.order) query.set("order", options.order);
+    return request<TreeSlice>(
+      `/trees/${encodeURIComponent(treeId)}/slice?${query}`,
+      { signal: options.signal },
+    );
+  },
+
+  upload: (form: FormData) =>
+    request<UploadAccepted>("/comparisons", { method: "POST", body: form }),
+
+  remove: (comparisonId: string) =>
+    request<{ id: string; bytes_freed: number }>(
+      `/comparisons/${encodeURIComponent(comparisonId)}`,
+      { method: "DELETE" },
+    ),
+};

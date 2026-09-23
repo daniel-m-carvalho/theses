@@ -1,6 +1,5 @@
 import type Sigma from "sigma";
 import type { NewickNode } from "../tree/types";
-import type { LayoutNode } from "../tree/layout";
 import type { TreeViewer } from "../viewer/tree_viewer";
 import { CategoricalColorScale } from "../color/color_scale";
 import {
