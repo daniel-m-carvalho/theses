@@ -93,7 +93,8 @@ def ingest_species(species: str, path: Path, directory: Path) -> IsolateMeta:
 
 
 def ingest_all(datasets_dir: Path | None = None, store_dir: Path | None = None) -> int:
-    from .. import catalogue, config
+    from .. import catalogue, config, db
+    from ..api.identity import SINGLE_OWNER
 
     sources = catalogue.discover_isolate_sources(datasets_dir)
     if not sources:
@@ -101,8 +102,25 @@ def ingest_all(datasets_dir: Path | None = None, store_dir: Path | None = None) 
         return 1
 
     root = Path(store_dir or config.STORE_DIR) / "isolates"
+    with db.using_store(root.parent):
+        db.create_schema()
+        return _ingest_each(sources, root)
+
+
+def _ingest_each(sources, root) -> int:
+    from .. import db
+    from ..api.identity import SINGLE_OWNER
+
     for species, path in sources.items():
         meta = ingest_species(species, path, root / species)
+        db.register_dataset(
+            dataset_id=f"isolates-{species}",
+            owner_id=SINGLE_OWNER,
+            kind=db.DatasetKind.ISOLATES,
+            display_name=f"{species} isolates",
+            store_path=f"isolates/{species}",
+            source_name=meta.source,
+        )
         total = sum(p.stat().st_size for p in (root / species).iterdir() if p.is_file())
         source_size = path.stat().st_size
         print(

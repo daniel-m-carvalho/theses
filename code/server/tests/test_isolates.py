@@ -255,10 +255,12 @@ def test_store_is_much_smaller_than_the_tsv(isolate_store):
 def client(isolate_store, monkeypatch):
     from fastapi.testclient import TestClient
 
-    from phylodelta import config
+    from phylodelta import config, db
     from phylodelta.api.app import create_app
     from phylodelta.isolates import registry
 
+    db.reset()
+    monkeypatch.setattr(config, "STORE_DIR", isolate_store.parent)
     monkeypatch.setattr(config, "ISOLATES_DIR", isolate_store)
     registry.reset_cache()
     yield TestClient(create_app())

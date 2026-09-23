@@ -1879,6 +1879,178 @@ The policy is stated in the OpenAPI description, where an integrator will actual
 The same discipline already exists one layer down: each store's `FORMAT_VERSION` is checked on
 read. The API deserved it too.
 
+## 19. From a precomputed catalogue to a multi-tenant service
+
+*Requirements given by the user, 2026-09-23. Recorded before design, because they invalidate an
+invariant §18 rests on and nothing should be built on the old assumption by accident.*
+
+### 19.1 What was settled
+
+| question | answer |
+|---|---|
+| Are trees uploaded by users, or ingested by an operator? | **Uploaded.** Users supply the trees *and* their isolate data. |
+| Is there authentication? | **Yes**, and each user's datasets are their own. |
+| How large may an upload be? | "Depends on what the frontend can upload" — which means **unbounded from our side, so the limit must be ours**. |
+| Do results outlive the session? | **Yes.** |
+| Do the vibrio/clostridium datasets stay shared? | **No — everything is user-owned.** |
+
+### 19.2 What this invalidates
+
+**§18.2's read-only invariant is dead.** It said the store holds no system of record: everything
+derived from `datasets/`, rebuildable by `build-all`, backed up with `cp -r` or not at all. A user's
+uploaded tree and their computed comparison exist **nowhere else**. Backup, durability and migration
+become real obligations rather than conveniences.
+
+**A database is now required, not an operational convenience.** §18.3 said PostgreSQL would be right
+*if already on the platform*. Users, ownership, uploads, job state, quotas and expiry are mutable,
+relational and concurrently written — exactly what a database is for. The split from §18.3 still
+holds: **a database for identity and job state; flat files for the bulk arrays.** Nothing about
+uploads makes SQL a good home for 40 MB of node columns.
+
+**Eight of the ten endpoints become authorisation decisions.** Only `/health` and `/metrics` are
+genuinely global. Slices, comparisons, isolate queries and `/datasets` all currently serve any data
+to anyone. Ownership is not a bolt-on; it is a parameter threaded through every read path.
+
+**Tree identity must become opaque.** Ids are `{species}-{method}` derived from the filename
+(`catalogue.py`), so the second user to upload `vibrio-upgma-tree.nwk` would overwrite the first.
+
+**Storage grows without bound.** Persistent results plus uploads sized by the client means quotas
+and retention are decisions someone must take. For scale: a 500k-leaf Newick is ~25 MB, an isolate
+TSV 12 MB, and a large pair commits the server to minutes of CPU — so the cap protects the CPU as
+much as the disk.
+
+### 19.3 What survives, which is most of the work
+
+Parsing, canonicalisation, reconciliation, correspondence, the metric plugin system, both tree
+stores, the comparison store, slicing, node identity, the whole read surface of the API, and all 320
+tests. Unchanged.
+
+What is needed is a **layer around** it — identity, ownership, uploads, jobs, quotas — not a
+rewrite. The stores simply get written per user instead of per deployment.
+
+### 19.4 `build-all` is demoted, not deleted
+
+With every dataset user-owned there is no global catalogue, so the `datasets/` → `build-all`
+pipeline stops being part of the product. It remains:
+
+* how the test suite builds a real store,
+* how the measurements throughout this record were produced,
+* and how anyone evaluates the system locally without uploading anything.
+
+Recorded so its continued existence is understood as deliberate rather than vestigial.
+
+### 19.5 Identity is undecided, and is designed around rather than waited on
+
+Whether PhyloDelta validates a token issued by PhyloViz, or runs its own accounts, is **not yet
+settled with the supervisors**.
+
+It need not block design. Everything downstream needs one thing: *which user is this request for*,
+as an opaque id. Putting that behind a single dependency means the eight endpoints consuming it do
+not care where it came from, and the source can be swapped without touching them.
+
+The interim assumption is **PhyloViz owns identity** — PhyloDelta verifies a token and stores an
+opaque subject id, never a password. It is the smaller commitment, the easier one to replace, and
+the one consistent with modules being decoupleable: identity is a platform concern, and duplicating
+it per module — along with password handling, reset flows and session management — would be
+duplicating a security surface, not just code.
+
+### 19.6 Still open
+
+* **Upload limits.** Ours to choose, since the client will not impose them. They bound CPU as well
+  as disk.
+* **Quotas and retention.** Results persist; storage does not shrink on its own.
+* **Sharing is deferred to future work** (user, 2026-09-23). Datasets are private to their owner;
+  there is no mechanism for one user to show another a comparison.
+
+  Deferring costs nothing **provided the store path does not encode the owner.** With files at
+  `store/trees/{uuid}/` and ownership held as a database column, adding sharing later is one new
+  table and no data movement. With files at `store/users/{user_id}/trees/{id}/`, it means copying,
+  symlinking or an indirection layer — the layout would have assumed a single owner forever.
+
+  So: **owner in the database, never in the path.** That is the whole cost of keeping the option,
+  and it is worth paying now.
+* **Computation on request.** A pair is seconds to minutes; no HTTP request survives that, so this
+  needs a job queue and a status endpoint. `proxy_read_timeout 600s` in the deployment is a stopgap,
+  and is marked as one.
+
+## 20. Ownership, and the seam that decides who is asking
+
+*Code: `db/`, `api/identity.py`. First step of §19, chosen because it is needed whichever way the
+identity question resolves.*
+
+**334 tests pass** (was 320), and the suite still passes without the native extension.
+
+### 20.1 A database, for the half that is relational
+
+`SQLAlchemy` over SQLite by default, PostgreSQL by `PHYLODELTA_DATABASE_URL`. The split §18.3
+described now applies: **the database holds ownership and job state; the bulk stays in flat files.**
+
+Two things it deliberately does **not** hold:
+
+* **A users table.** Whether identity comes from a PhyloViz token or local accounts is undecided
+  (§19.5), so `owner_id` is an opaque string with no foreign key. The table does not need to know.
+* **Tree metadata.** Leaf counts, depth, species and method stay in each store's `meta.json`, which
+  remains authoritative and self-describing — a store directory can still be read without the
+  database. The row holds ownership and a pointer. Two sources of truth for one fact is how they
+  drift.
+
+Adding SQLAlchemy preserves the property worth keeping: SQLite is stdlib and SQLAlchemy is a pure
+wheel, so the backend still runs from `uv sync` and a directory with **no service to install**.
+
+`create_all` is enough while the schema is young and the data rebuildable. Once uploads exist there
+is user data to carry across a change, and this needs a migration tool — recorded in the module
+rather than left to be discovered.
+
+### 20.2 Owner is a column, never a path
+
+`store_path` does not contain the owner id, and a test asserts it. That is the whole cost of keeping
+sharing (§19.6) a new table rather than a data migration, and it is paid now because it is free now.
+
+### 20.3 One answer-site for "who is asking"
+
+`api/identity.py` is a single dependency returning an opaque owner id. Three modes:
+
+| `PHYLODELTA_AUTH` | behaviour |
+|---|---|
+| `none` (default) | everything belongs to one fixed owner — what the current single-operator deployment is |
+| `header` | owner read from a header, trusted as given. **Not authentication**; it makes multi-tenant behaviour testable and lets a frontend be built before identity is settled |
+| `token` | the intended production mode. **Deliberately unimplemented**: returns 501 |
+
+That last is the decision worth defending. A token verifier that does not verify is worse than an
+honest error, because it looks like security — and someone would eventually ship it. The error says
+what is undecided and what to do meanwhile.
+
+Because the eight endpoints that need an owner take it from this dependency, resolving §19.5 changes
+this module and nothing else.
+
+### 20.4 `/datasets` is answered from the database, not a directory walk
+
+It now lists **an owner's** datasets. That also retires the cost noted in §18.3: the endpoint was
+rebuilding the catalogue per request by scanning directories and decoding every tree's leaf labels
+to measure pair overlap — 114 ms cold for three trees, and pairs are quadratic.
+
+A recorded dataset whose store is missing is **skipped, not fatal**. A partial ingest should not
+hide every other dataset behind an error; the row's `status` is where that belongs.
+
+### 20.5 A bug this uncovered, which was silently corrupting test isolation
+
+The first version cached one engine globally, and `database_url()` derived from `config.STORE_DIR`.
+So `ingest_trees(store_dir=tmp)` wrote **stores to the temporary directory and ownership rows to the
+real database**.
+
+Nothing failed. The tests passed — by reading ids from the developer's real database that happened
+to match the ones the fixture had just built. The symptom would have arrived much later, as a test
+run that quietly mutated real data.
+
+The fix makes the invariant structural rather than remembered: **engines are cached by URL**, so
+pointing at another store yields another database, and `using_store()` scopes the offline commands
+so stores and their ownership rows land together. Both are asserted:
+`test_pointing_at_another_store_yields_another_database` and
+`test_the_database_lives_beside_the_store_it_describes`.
+
+The general shape is worth noting, because it recurs: *a cache keyed by nothing is a cache keyed by
+the first caller.*
+
 ---
 
 ## Findings carried forward

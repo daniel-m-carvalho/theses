@@ -19,7 +19,8 @@ import sys
 import time
 from pathlib import Path
 
-from .. import catalogue, config
+from .. import catalogue, config, db
+from ..api.identity import SINGLE_OWNER
 from ..isolates.ingest import ingest_all as ingest_isolates_all
 from ..metrics import registry
 from ..metrics.contract import validate_result
@@ -43,8 +44,15 @@ def ingest_trees(datasets_dir: Path | None = None, store_dir: Path | None = None
     from ..trees import native
 
     print(f"parser: {native.describe()}", file=sys.stderr)
+    db.create_schema()
 
     trees_dir = Path(store_dir or config.STORE_DIR) / "trees"
+    with db.using_store(trees_dir.parent):
+        db.create_schema()
+        return _ingest_into(sources, trees_dir)
+
+
+def _ingest_into(sources, trees_dir: Path) -> int:
     for source in sources:
         started = time.perf_counter()
         arrays = parse_newick_file(source.path, fast=True)
@@ -70,6 +78,16 @@ def ingest_trees(datasets_dir: Path | None = None, store_dir: Path | None = None
                 max_depth=arrays.max_depth,
                 suppressed_unary=suppressed,
             ),
+        )
+        # Ownership lives in the database; the store path does not name an
+        # owner, which is what keeps sharing a table rather than a migration.
+        db.register_dataset(
+            dataset_id=meta.id,
+            owner_id=SINGLE_OWNER,
+            kind=db.DatasetKind.TREE,
+            display_name=f"{meta.species} {meta.method}".strip(),
+            store_path=f"trees/{meta.id}",
+            source_name=meta.source,
         )
         total = store_bytes(directory)
         print(

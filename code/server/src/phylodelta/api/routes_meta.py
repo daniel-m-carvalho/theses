@@ -5,11 +5,13 @@ from __future__ import annotations
 import itertools
 import json
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from .. import config
 from ..trees import registry
+from .identity import current_owner
 from ..metrics import registry as metric_registry
+from .. import db
 from ..metrics import registry_pairs
 from ..metrics.runners import is_available
 from .schemas import (
@@ -96,12 +98,10 @@ def _pairs(trees: list[TreeSummary]) -> list[PairSummary]:
     return out
 
 
-def _isolates() -> list[IsolateSummary]:
-    root = config.ISOLATES_DIR
-    if not root.is_dir():
-        return []
+def _isolates(owner: str) -> list[IsolateSummary]:
     out: list[IsolateSummary] = []
-    for directory in sorted(root.iterdir()):
+    for record in db.datasets_for(owner, kind=db.DatasetKind.ISOLATES):
+        directory = config.STORE_DIR / record.store_path
         meta_path = directory / "meta.json"
         if not meta_path.exists():
             continue
@@ -116,20 +116,47 @@ def _isolates() -> list[IsolateSummary]:
     return out
 
 
-@router.get("/datasets", response_model=DatasetsResponse, summary="Trees, pairs and isolate stores")
-def datasets() -> DatasetsResponse:
-    trees = [
-        TreeSummary(
-            id=reader.meta.id,
-            species=reader.meta.species,
-            method=reader.meta.method,
-            n_nodes=reader.meta.n_nodes,
-            n_leaves=reader.meta.n_leaves,
-            max_depth=reader.meta.max_depth,
+@router.get(
+    "/datasets",
+    response_model=DatasetsResponse,
+    summary="The trees, pairs and isolate stores belonging to you",
+)
+def datasets(owner: str = Depends(current_owner)) -> DatasetsResponse:
+    """What this owner has.
+
+    Answered from the database rather than by walking the store. That is what
+    makes it filterable by owner at all — and it removes a scan whose cost grew
+    with the number of datasets, since pairs are quadratic in trees and each
+    needed both trees' labels decoded.
+
+    Structural facts (leaf counts, depth, species) still come from each store's
+    own `meta.json`, which stays authoritative. The database holds ownership
+    and a pointer, not a second copy of what a store knows about itself.
+    """
+    owned = db.datasets_for(owner, kind=db.DatasetKind.TREE)
+    trees = []
+    for record in owned:
+        try:
+            reader = registry.get_tree(record.id)
+        except registry.TreeNotFound:
+            # Recorded but its store is missing — a partial ingest, or a store
+            # wiped without the database. Skip rather than fail the listing;
+            # the row's status is the place to represent that, not an error
+            # that hides every other dataset.
+            continue
+        trees.append(
+            TreeSummary(
+                id=reader.meta.id,
+                species=reader.meta.species,
+                method=reader.meta.method,
+                n_nodes=reader.meta.n_nodes,
+                n_leaves=reader.meta.n_leaves,
+                max_depth=reader.meta.max_depth,
+            )
         )
-        for reader in (registry.get_tree(tid) for tid in registry.available_tree_ids())
-    ]
-    return DatasetsResponse(trees=trees, pairs=_pairs(trees), isolates=_isolates())
+    return DatasetsResponse(
+        trees=trees, pairs=_pairs(trees), isolates=_isolates(owner)
+    )
 
 
 @router.get(

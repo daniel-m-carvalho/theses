@@ -32,11 +32,12 @@ def computed_store(tmp_path_factory):
 
 @pytest.fixture()
 def client(computed_store, monkeypatch):
-    from phylodelta import config
+    from phylodelta import config, db
     from phylodelta.api.app import create_app
     from phylodelta.metrics import registry_pairs
     from phylodelta.trees import registry
 
+    db.reset()
     monkeypatch.setattr(config, "STORE_DIR", computed_store)
     monkeypatch.setattr(config, "TREES_DIR", computed_store / "trees")
     monkeypatch.setattr(config, "PAIRS_DIR", computed_store / "pairs")

@@ -43,12 +43,13 @@ def built(tmp_path_factory):
 
 @pytest.fixture()
 def client(built, monkeypatch):
-    from phylodelta import config
+    from phylodelta import config, db
     from phylodelta.api.app import create_app
     from phylodelta.isolates import registry as isolate_registry
     from phylodelta.metrics import registry_pairs
     from phylodelta.trees import registry as tree_registry
 
+    db.reset()
     monkeypatch.setattr(config, "STORE_DIR", built)
     monkeypatch.setattr(config, "TREES_DIR", built / "trees")
     monkeypatch.setattr(config, "PAIRS_DIR", built / "pairs")

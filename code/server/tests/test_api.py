@@ -8,11 +8,12 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture()
 def client(real_store, monkeypatch):
-    from phylodelta import config
+    from phylodelta import config, db
     from phylodelta.api import routes_meta
     from phylodelta.api.app import create_app
     from phylodelta.trees import registry
 
+    db.reset()
     monkeypatch.setattr(config, "STORE_DIR", real_store)
     monkeypatch.setattr(config, "TREES_DIR", real_store / "trees")
     monkeypatch.setattr(config, "PAIRS_DIR", real_store / "pairs")

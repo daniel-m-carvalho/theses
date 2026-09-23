@@ -1,11 +1,14 @@
 # Generated artefacts: rebuildable from datasets/ with `phylodelta ingest-trees`.
-store/
+*.pyc
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+.pytest_cache/
 .venv/
 __pycache__/
-*.pyc
-.pytest_cache/
-native/TreeDiff/
-native/sdsl/
-native/sdsl-lite/
 native/*.so
+native/TreeDiff/
+native/sdsl-lite/
+native/sdsl/
 native/src/*.o
+store/
