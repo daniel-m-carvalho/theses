@@ -179,3 +179,129 @@ def test_datasets_lists_only_your_trees(real_store, monkeypatch):
     assert theirs["pairs"] == []
     registry.reset_cache()
     db.reset()
+
+
+# --- every data endpoint refuses another owner -----------------------------
+
+@pytest.fixture(scope="module")
+def owned_store(tmp_path_factory, datasets_dir):
+    """A complete store — trees and isolates — all owned by `local`.
+
+    Built separately from `real_store` because it needs isolate data too, and
+    because adding that to a session-scoped fixture would change what other
+    tests see.
+    """
+    from phylodelta.isolates.ingest import ingest_all
+    from phylodelta.precompute.pipeline import ingest_trees
+
+    store = tmp_path_factory.mktemp("owned")
+    assert ingest_trees(datasets_dir=datasets_dir, store_dir=store) == 0
+    assert ingest_all(datasets_dir=datasets_dir, store_dir=store) == 0
+    return store
+
+
+@pytest.fixture()
+def two_owners(owned_store, monkeypatch):
+    """That store, owned by `local`, with authentication by header."""
+    from phylodelta.api.app import create_app
+    from phylodelta.metrics import registry_pairs
+    from phylodelta.trees import registry
+
+    db.reset()
+    for attribute, value in [
+        ("STORE_DIR", owned_store), ("TREES_DIR", owned_store / "trees"),
+        ("PAIRS_DIR", owned_store / "pairs"),
+        ("ISOLATES_DIR", owned_store / "isolates"),
+    ]:
+        monkeypatch.setattr(config, attribute, value)
+    monkeypatch.setenv("PHYLODELTA_AUTH", "header")
+    from phylodelta.isolates import registry as isolate_registry
+
+    for cache in (registry, registry_pairs, isolate_registry):
+        cache.reset_cache()
+    yield TestClient(create_app())
+    for cache in (registry, registry_pairs, isolate_registry):
+        cache.reset_cache()
+    db.reset()
+
+
+def as_owner(client: TestClient, owner: str, method: str, url: str, **kw):
+    return client.request(method, url, headers={"X-PhyloDelta-Owner": owner}, **kw)
+
+
+#: Every endpoint that serves owned data, with a request that works for `local`.
+DATA_ENDPOINTS = [
+    ("GET", "/api/v1/trees/vibrio-upgma"),
+    ("GET", "/api/v1/trees/vibrio-upgma/slice?budget=10"),
+    ("GET", "/api/v1/isolates/vibrio/keys"),
+    ("GET", "/api/v1/isolates/vibrio/values?key=Continent"),
+]
+
+
+@pytest.mark.parametrize("method,url", DATA_ENDPOINTS)
+def test_the_owner_can_reach_it(two_owners, method, url):
+    assert as_owner(two_owners, "local", method, url).status_code == 200
+
+
+@pytest.mark.parametrize("method,url", DATA_ENDPOINTS)
+def test_a_stranger_cannot(two_owners, method, url):
+    assert as_owner(two_owners, "stranger", method, url).status_code == 404
+
+
+def test_compositions_are_owner_scoped(two_owners):
+    body = {"leaves": ["1"], "segment_by": "Continent"}
+    assert as_owner(
+        two_owners, "local", "POST",
+        "/api/v1/isolates/vibrio/compositions", json=body
+    ).status_code == 200
+    assert as_owner(
+        two_owners, "stranger", "POST",
+        "/api/v1/isolates/vibrio/compositions", json=body
+    ).status_code == 404
+
+
+def test_a_strangers_404_is_indistinguishable_from_a_missing_one(two_owners):
+    """Otherwise ids can be probed for existence by someone who cannot read them."""
+    real_but_not_yours = as_owner(two_owners, "stranger", "GET", "/api/v1/trees/vibrio-upgma")
+    never_existed = as_owner(two_owners, "stranger", "GET", "/api/v1/trees/no-such-tree")
+
+    assert real_but_not_yours.status_code == never_existed.status_code == 404
+    assert real_but_not_yours.json()["code"] == never_existed.json()["code"]
+
+
+def test_errors_do_not_enumerate_other_owners_data(two_owners):
+    """An error naming what exists is a disclosure, however unreachable it is."""
+    for method, url in [
+        ("GET", "/api/v1/trees/nope"),
+        ("GET", "/api/v1/isolates/nope/keys"),
+        ("GET", "/api/v1/comparisons/nope__nope"),
+    ]:
+        body = as_owner(two_owners, "stranger", method, url).json()
+        text = f"{body.get('detail', '')} {body.get('hint', '')}"
+        assert "vibrio" not in text and "clostridium" not in text, url
+
+
+def test_health_and_metrics_stay_global(two_owners):
+    """Neither serves owned data, so neither should demand an owner."""
+    assert two_owners.get("/api/v1/health").status_code == 200
+    assert two_owners.get("/api/v1/metrics").status_code == 200
+
+
+def test_every_data_endpoint_declares_an_owner():
+    """A guard against adding an endpoint and forgetting to scope it.
+
+    One was missed while threading ownership through — the comparison slice —
+    and an audit caught it where reading the diff had not.
+    """
+    from phylodelta.api.app import create_app
+
+    unscoped = {
+        f"{method.upper()} {path}"
+        for path, operations in create_app().openapi()["paths"].items()
+        for method, operation in operations.items()
+        if not any(
+            p.get("name") == "X-PhyloDelta-Owner"
+            for p in operation.get("parameters", [])
+        )
+    }
+    assert unscoped == {"GET /api/v1/health", "GET /api/v1/metrics"}

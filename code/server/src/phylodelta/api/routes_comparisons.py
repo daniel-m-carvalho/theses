@@ -11,7 +11,7 @@ from __future__ import annotations
 import math
 
 import numpy as np
-from fastapi import APIRouter, Path, Query
+from fastapi import APIRouter, Depends, Path, Query
 
 from ..metrics import registry_pairs
 from ..metrics.contract import NO_CORRESPONDENCE
@@ -21,20 +21,23 @@ from ..trees.summarise import flatten
 from . import errors
 from .routes_meta import API_PREFIX
 from .schemas import ComparisonSlice, ComparisonSummary, ComparisonValues
-from .slicing import (
-    ORDER_DESCRIPTION,
-    Order,
+from .access import (
     correspondence_or_404,
     pair_or_404,
-    side_of,
-    summariser_for,
+    tree_or_404,
 )
+from .identity import current_owner
+from .slicing import ORDER_DESCRIPTION, Order, side_of, summariser_for
 
 router = APIRouter(prefix=f"{API_PREFIX}/comparisons", tags=["comparisons"])
 
 
 def values_at(
-    pair_id: str, side: str, ids: list[int], metric_reader: PairReader | None = None
+    owner: str,
+    pair_id: str,
+    side: str,
+    ids: list[int],
+    metric_reader: PairReader | None = None,
 ) -> ComparisonValues:
     """Gather per-node values at the given stored ids, in that order.
 
@@ -49,7 +52,7 @@ def values_at(
     0xFFFFFFFF would look like a valid node id.
     """
     index = np.asarray(ids, dtype=np.int64)
-    correspondence = correspondence_or_404(pair_id)
+    correspondence = correspondence_or_404(owner, pair_id)
     similarity = np.asarray(correspondence.column(side, "similarity"))[index]
     corresponds = np.asarray(correspondence.column(side, "corresponds"))[index]
 
@@ -91,14 +94,15 @@ def comparison_summary(
             "way to read values. Off by default."
         ),
     ),
+    owner: str = Depends(current_owner),
 ) -> ComparisonSummary:
-    reader = pair_or_404(pair_id, metric)
+    reader = pair_or_404(owner, pair_id, metric)
     notes = reader.meta.notes
     reconciliation = notes.get("reconciliation", {})
 
     values = None
     if include_values:
-        values = values_at(pair_id, "left", list(range(reader.meta.n_left)), reader)
+        values = values_at(owner, pair_id, "left", list(range(reader.meta.n_left)), reader)
 
     return ComparisonSummary(
         pair=reader.meta.pair_id,
@@ -127,6 +131,7 @@ def comparison_slice(
     budget: int = Query(500, ge=1, le=50_000),
     metric: str = Query("rf"),
     order: Order = Query("size", description=ORDER_DESCRIPTION),
+    owner: str = Depends(current_owner),
 ) -> ComparisonSlice:
     """Values for exactly the nodes a tree slice with the same parameters returns.
 
@@ -138,7 +143,7 @@ def comparison_slice(
     instead; this endpoint exists for the case where the client already holds
     the topology and only wants to switch metric.
     """
-    reader = pair_or_404(pair_id, metric)
+    reader = pair_or_404(owner, pair_id, metric)
     side = side_of(reader, tree)
 
     try:
@@ -165,5 +170,5 @@ def comparison_slice(
         other_tree=other,
         root=root,
         budget=budget,
-        nodes=values_at(reader.meta.pair_id, side, ids, reader),
+        nodes=values_at(owner, reader.meta.pair_id, side, ids, reader),
     )

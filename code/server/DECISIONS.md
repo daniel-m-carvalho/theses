@@ -2051,6 +2051,106 @@ so stores and their ownership rows land together. Both are asserted:
 The general shape is worth noting, because it recurs: *a cache keyed by nothing is a cache keyed by
 the first caller.*
 
+## 21. The upload unit is a comparison, not a dataset
+
+*User, 2026-09-23: "a single upload with both trees and respective metadata (typing data)".*
+
+### 21.1 What that decides
+
+```
+POST /api/v1/comparisons            (multipart)
+  left_tree        required   .nwk
+  right_tree       required   .nwk
+  left_isolates    optional   .tsv
+  right_isolates   optional   .tsv    omit when both trees are one species
+  name             optional   display label
+
+-> 202 Accepted   {"id": ..., "status": "pending"}
+```
+
+Omitting `right_isolates` means the left file covers both, which handles same-species and
+cross-species uploads without a mode flag to get wrong. Both are optional because a tree with no
+typing data is already a case this backend handles — 3.9% of vibrio leaves and 10.9% of
+clostridium's have no isolate rows (§7.5), so "no metadata" is a supported state rather than a
+missing input.
+
+### 21.2 Consequences
+
+**The `Comparison` row exists from the moment of upload**, in `pending`. A client has something to
+poll before anything has been computed, and the id it is given at upload is the id it keeps.
+
+**One transaction, or none.** A half-ingested bundle is useless: a comparison needs both trees, and
+a tree without its pair cannot be compared with anything. So the bundle lands whole or leaves
+nothing behind, and a failure is a `failed` status with a reason rather than orphaned rows and a
+directory of fragments.
+
+**Trees remain individually addressable.** They are *created* as a bundle and owned together, but
+`/trees/{id}/slice` still serves one. The bundle is how they arrive, not how they are read.
+
+**Bundles are large.** Two 25 MB Newick files plus two 12 MB TSVs is ~75 MB in one request. nginx is
+already at `client_max_body_size 300m`; the backend must **stream to disk rather than buffer**, or a
+handful of concurrent uploads exhausts memory. This is the first place where the upload limit
+(§19.6, still ours to choose) protects memory rather than just disk.
+
+### 21.3 What this model gives up, deliberately
+
+Comparing A with C later means **re-uploading A**. There is no library of previously uploaded trees
+to pair from.
+
+That is a real cost — duplicate storage, duplicate ingestion — and it is the right trade for a tool
+whose session is "here are my two trees". Recorded so it is understood as a choice. Reversing it
+means allowing a comparison to reference existing dataset ids instead of files, which the model
+already permits: `Comparison` holds two dataset ids and does not care how they arrived.
+
+## 22. Every data endpoint is owner-scoped
+
+*Code: `api/access.py`. Second step of §19. 347 tests pass.*
+
+**8 of 10 endpoints now require an owner.** The two that do not — `/health` and `/metrics` — serve
+nothing owned, and a test asserts that the set of unscoped endpoints is exactly those two.
+
+### 22.1 Two properties the checks are shaped around
+
+**"Not yours" and "does not exist" return the same 404, with the same code.** Distinguishing them
+would let anyone discover which ids exist by probing, which is a disclosure even when the data
+behind them stays unreachable. Asserted directly:
+`test_a_strangers_404_is_indistinguishable_from_a_missing_one`.
+
+**Errors do not enumerate what exists.** The isolate 404 used to list the available species —
+genuinely helpful when there was one operator, and a leak once datasets are owned. It now points at
+`/datasets`, which answers the same question scoped to the caller. The test that asserted the old
+behaviour was rewritten to assert the new one, and a broader test checks that no error mentions
+another owner's data.
+
+Ownership is also checked **before the store is opened**: a reader builds memory maps and decodes
+labels, and doing that for a dataset the caller cannot have is both wasted and a way to tell the two
+404s apart by timing.
+
+### 22.2 A comparison is owned by owning both its trees
+
+A pair id names two datasets, so `pair_or_404` checks the caller owns **both**, rather than trusting
+the comparison's own row. A comparison should not outlive access to the trees it was computed from.
+
+### 22.3 One endpoint was missed, and an audit caught it
+
+Threading the dependency through seven endpoints by hand missed
+`/api/v1/comparisons/{pair_id}/slice` — it kept serving any pair to anyone. Reading the diff did not
+show it; enumerating the OpenAPI document and asking which operations lacked the owner parameter
+did, immediately.
+
+That check is now a test — `test_every_data_endpoint_declares_an_owner` — so the next endpoint added
+without scoping fails the suite rather than shipping. **An authorisation model enforced by
+remembering to apply it is not a model.**
+
+### 22.4 What the tests establish
+
+Beyond the unit checks, the same four endpoints are exercised twice over a real store: once as the
+owner, expecting 200, and once as a stranger, expecting 404. Parametrised, so adding an endpoint to
+the list covers both directions.
+
+The fixture builds its own store with trees **and** isolates rather than reusing the session-scoped
+one, because adding isolate data there would change what unrelated tests see.
+
 ---
 
 ## Findings carried forward

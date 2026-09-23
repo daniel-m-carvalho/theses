@@ -7,15 +7,18 @@ that. Nodes it would have discarded after downloading are never sent.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Path, Query
+from fastapi import APIRouter, Depends, Path, Query
 
 from ..trees import registry
 from ..trees.summarise import count_leaves, flatten
 from .routes_comparisons import values_at
 from . import errors
+from .access import tree_or_404
+from .identity import current_owner
 from .routes_meta import API_PREFIX
 from .schemas import SliceNodes, TreeDetail, TreeSlice
-from .slicing import ORDER_DESCRIPTION, Order, pair_or_404, side_of, summariser_for
+from .access import pair_or_404 as access_pair
+from .slicing import ORDER_DESCRIPTION, Order, side_of, summariser_for
 
 router = APIRouter(prefix=f"{API_PREFIX}/trees", tags=["trees"])
 
@@ -37,8 +40,11 @@ def _reader(tree_id: str):
 
 
 @router.get("/{tree_id}", response_model=TreeDetail, summary="One tree's header")
-def tree_detail(tree_id: str = Path(examples=["vibrio-upgma"])) -> TreeDetail:
-    meta = _reader(tree_id).meta
+def tree_detail(
+    tree_id: str = Path(examples=["vibrio-upgma"]),
+    owner: str = Depends(current_owner),
+) -> TreeDetail:
+    meta = tree_or_404(owner, tree_id).meta
     return TreeDetail(
         id=meta.id, species=meta.species, method=meta.method,
         n_nodes=meta.n_nodes, n_leaves=meta.n_leaves, max_depth=meta.max_depth,
@@ -67,8 +73,9 @@ def tree_slice(
     ),
     metric: str = Query("rf", description="Only meaningful with `compare`."),
     order: Order = Query("size", description=ORDER_DESCRIPTION),
+    owner: str = Depends(current_owner),
 ) -> TreeSlice:
-    reader = _reader(tree_id)
+    reader = tree_or_404(owner, tree_id)
     if root >= reader.meta.n_nodes:
         raise errors.not_found(
             "node_out_of_range",
@@ -77,7 +84,7 @@ def tree_slice(
             "Node ids come from a slice's nodes.id, not from the source file.",
         )
 
-    pair = pair_or_404(compare, metric) if compare is not None else None
+    pair = access_pair(owner, compare, metric) if compare is not None else None
     node = summariser_for(reader, tree_id, order, pair, metric).summarise(root, budget)
     if node is None:  # unreachable while budget >= 1, but do not serve a lie
         raise errors.ApiError(
@@ -92,7 +99,7 @@ def tree_slice(
         # Built from the same `flat["id"]` this response carries, so the two are
         # aligned by construction rather than by re-running anything.
         comparison = values_at(
-            pair.meta.pair_id, side_of(pair, tree_id), flat["id"], pair
+            owner, pair.meta.pair_id, side_of(pair, tree_id), flat["id"], pair
         )
 
     hidden = sum(

@@ -7,11 +7,13 @@ about the leaves it is currently showing and receives counts for those.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Body, Path, Query
+from fastapi import APIRouter, Body, Depends, Path, Query
 
 from ..isolates import registry as isolate_registry
 from ..isolates.query import UnknownFacet, UnknownValue, compositions, value_counts
 from . import errors
+from .access import isolates_or_404
+from .identity import current_owner
 from .routes_meta import API_PREFIX
 from .schemas import (
     CompositionRequest,
@@ -31,23 +33,12 @@ router = APIRouter(prefix=f"{API_PREFIX}/isolates", tags=["isolates"])
 MAX_LEAVES = 50_000
 
 
-def _reader(species: str):
-    try:
-        return isolate_registry.get_isolates(species)
-    except isolate_registry.IsolatesNotFound:
-        available = isolate_registry.available_species()
-        raise errors.not_found(
-            "isolates_not_found",
-            f"No isolate store for {species!r}.",
-            f"Available: {', '.join(available)}."
-            if available
-            else "Run `phylodelta ingest-isolates`.",
-        ) from None
-
-
 @router.get("/{species}/keys", response_model=IsolateKeys, summary="Queryable isolate columns")
-def isolate_keys(species: str = Path(examples=["vibrio"])) -> IsolateKeys:
-    reader = _reader(species)
+def isolate_keys(
+    species: str = Path(examples=["vibrio"]),
+    owner: str = Depends(current_owner),
+) -> IsolateKeys:
+    reader = isolates_or_404(owner, species)
     return IsolateKeys(
         species=reader.meta.species,
         n_isolates=reader.meta.n_rows,
@@ -77,8 +68,9 @@ def isolate_values(
             "`/keys` reports the value counts, so ask for what you need."
         ),
     ),
+    owner: str = Depends(current_owner),
 ) -> list[FacetValues]:
-    reader = _reader(species)
+    reader = isolates_or_404(owner, species)
     wanted = key or [f.name for f in reader.meta.facets]
     out: list[FacetValues] = []
     for name in wanted:
@@ -107,8 +99,9 @@ def isolate_values(
 def isolate_compositions(
     species: str = Path(examples=["vibrio"]),
     request: CompositionRequest = Body(...),
+    owner: str = Depends(current_owner),
 ) -> CompositionResponse:
-    reader = _reader(species)
+    reader = isolates_or_404(owner, species)
     if len(request.leaves) > MAX_LEAVES:
         raise errors.unprocessable(
             "too_many_leaves",

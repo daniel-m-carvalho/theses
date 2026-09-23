@@ -304,12 +304,20 @@ def test_compositions_endpoint(client):
     assert missing["available"] == 0 and missing["segments"] == []
 
 
-def test_unknown_species_lists_what_exists(client):
+def test_unknown_species_does_not_list_what_exists(client):
+    """It used to name the available species. That leaks.
+
+    Once datasets are owned, an error message enumerating what exists tells a
+    caller about data they cannot reach. The hint now points at /datasets,
+    which answers the same question scoped to the caller.
+    """
     r = client.get("/api/v1/isolates/nope/keys")
     assert r.status_code == 404
     body = r.json()
     assert body["code"] == "isolates_not_found"
-    assert "vibrio" in body["hint"]
+    assert "vibrio" not in body["hint"]
+    assert "clostridium" not in body["hint"]
+    assert "datasets" in body["hint"]
 
 
 def test_unknown_key_is_404(client):
