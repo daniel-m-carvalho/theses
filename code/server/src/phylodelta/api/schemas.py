@@ -485,3 +485,30 @@ class ComparisonStatusResponse(BaseModel):
             "status strings."
         )
     )
+
+
+class WhoAmI(BaseModel):
+    """The caller, as this server resolved them.
+
+    Exists so a frontend can show who is signed in, and so the demo can make
+    visible that it is running unauthenticated rather than leaving that to a
+    server log nobody reads.
+    """
+
+    owner_id: str = Field(
+        description=(
+            "The id your data is owned by. Namespaced by issuer where there is "
+            "one, so subjects from different providers cannot collide."
+        ),
+        examples=["local", "https://accounts.google.com:1029384756"],
+    )
+    subject: str = Field(description="The identity provider's own id for you.")
+    issuer: str = Field("", description="Which authority vouched for this. Empty for the mock.")
+    email: str = ""
+    display_name: str = ""
+    mock: bool = Field(
+        description=(
+            "True when nothing was verified. A client showing account state "
+            "should say so rather than presenting a demo user as signed in."
+        )
+    )

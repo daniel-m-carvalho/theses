@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends
 
 from .. import config
 from ..trees import registry
-from .identity import current_owner
+from .identity import current_owner, current_principal
 from ..metrics import registry as metric_registry
 from .. import db
 from ..db import jobs as queue
@@ -25,6 +25,7 @@ from .schemas import (
     PairSummary,
     ScalarDescription,
     TreeSummary,
+    WhoAmI,
 )
 
 #: The API's own version, independent of any store's FORMAT_VERSION.
@@ -59,6 +60,30 @@ def health() -> HealthResponse:
         version=API_VERSION,
         store_ready=bool(tree_ids),
         queue=depth,
+    )
+
+
+@router.get(
+    "/me",
+    response_model=WhoAmI,
+    tags=["meta"],
+    summary="The caller, as this server resolved them",
+)
+def who_am_i(principal=Depends(current_principal)) -> WhoAmI:
+    """Who this request is for.
+
+    The one endpoint that reports on authentication rather than consuming it.
+    Note what it does *not* do: no route decides anything from these fields —
+    ownership is enforced by `owner_id` in the database, and this is for the
+    client's benefit only.
+    """
+    return WhoAmI(
+        owner_id=principal.owner_id,
+        subject=principal.subject,
+        issuer=principal.issuer,
+        email=principal.email,
+        display_name=principal.display_name,
+        mock=principal.mock,
     )
 
 

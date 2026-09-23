@@ -2404,6 +2404,139 @@ directory once a comparison is `ready`.
 **Progress is binary.** A comparison is pending, running or ready; there is no percentage. For a
 500k-node pair that is minutes of "running" with nothing to show.
 
+## 25. Authentication: one interceptor, in front of everything
+
+§20 put identity behind a single dependency so the undecided question — whose tokens? — could be
+answered later. This answers it, and changes the shape: identity is now resolved by **middleware,
+before routing**, and `token` mode is no longer a 501.
+
+### 25.1 Middleware, not a dependency on each route
+
+The previous design put `Depends(current_owner)` on every endpoint. It worked, and it had one
+structural flaw: it is a check you must remember to add.
+
+**That is not hypothetical here.** Threading ownership through seven routes by hand, one was missed
+— the comparison slice — and it was found by enumerating the OpenAPI document, not by reading the
+diff (§22.3). The design had already failed once in exactly the way this replaces.
+
+Middleware inverts the default. Authentication happens before a route is resolved, so a new
+endpoint is protected by existing. Making one public requires naming it in `PUBLIC_PATHS`, which is
+a visible list somebody can review, rather than an absence nobody can see.
+
+The test changed with it, and got stronger. The old one inspected the OpenAPI document for an owner
+parameter on every operation — a *proxy* for the property, checking that each route remembered to
+ask. The new one calls every route the application declares, with no credentials, and requires a
+refusal. It tests the property itself, and covers a new endpoint the moment it exists.
+
+**Route handlers contain no authentication logic.** They ask for `owner: str = Depends(current_owner)`
+and get an opaque id; `current_owner` now does nothing but read what the middleware already
+resolved. It kept its name and its signature, which is why adding all of this touched **no route
+handler at all**.
+
+### 25.2 Three interceptors, one seam
+
+An interceptor answers one question — who is this request for? — and returns a `Principal`. Nothing
+downstream can tell which one ran.
+
+`mock`
+: A hardcoded user, nothing verified. The demo runs with no identity provider and no configuration.
+
+`header`
+: Owner id from a trusted header. Not authentication either, but the mock has exactly one user and
+some properties only appear with two — that a dataset is invisible to a non-owner cannot be shown
+with a single identity.
+
+`jwt`
+: The real one. Verifies a signed bearer token, RS256 against a provider's JWKS or HS256 against a
+shared secret.
+
+**Integrating with PHYLOViZ is writing a fourth and selecting it.** No route, no service, no model
+changes. A test asserts that directly: two different interceptors, the same endpoint, identical
+response shape, only the identity differing.
+
+### 25.3 The mock is opt-in and loud
+
+A mock that verifies nothing is the most dangerous component here, because it works perfectly. Three
+things keep it visible:
+
+* it is **never chosen implicitly** — an unrecognised `PHYLODELTA_AUTH` is a startup failure, not a
+  fallback to mock;
+* the service **logs a warning at startup** naming the user every request will become;
+* the principal carries `mock: true`, surfaced at `GET /api/v1/me`, so a client can say "demo mode"
+  rather than presenting a hardcoded user as signed in.
+
+The mock's subject is `local` — the same owner the offline pipeline attributes what it builds to, so
+a catalogue from `build-all` is readable in the demo and no existing row was orphaned.
+
+### 25.4 What the JWT interceptor refuses, and why each one matters
+
+A JWT check that passes everything looks identical to one that works. Each of these is tested:
+
+**Algorithms are pinned by configuration, never read from the token.** The classic attack: an RS256
+deployment publishes its public key, an attacker re-signs a token as HS256 using that public key as
+the HMAC secret, and a verifier trusting the token's own `alg` accepts the forgery. `alg: none` is
+refused for the same reason. Proving this needed the forged token assembled by hand — PyJWT refuses
+to *encode* it, which is good defence but would have meant the test never reached our verifier.
+
+**The issuer is configured, never discovered.** Keys are fetched only from the JWKS URL this server
+was given. Following an issuer named inside an unverified token would let the token nominate who
+vouches for it, and would turn this into a request-forgery primitive.
+
+**`aud` is required.** A signature proves who minted a token, not who it was minted for. Without an
+audience check, any token from the same provider — issued to any other service — would be accepted
+here.
+
+**`exp`, `iss` and `sub` are required**, with 30 s of leeway for clock skew.
+
+**Refusals do not say which check failed.** One message for every way a token can be unacceptable,
+so a forger does not learn which thing to fix next.
+
+**A short HMAC secret is refused at startup** (RFC 7518 §3.2, 32 bytes). Refused rather than warned:
+a warning in a log is not something anybody reads before going live.
+
+Configuration is validated **when the process starts**, not on the first request that needed it to
+work. An incomplete JWT setup cannot serve traffic in an undefined auth state.
+
+### 25.5 Owner ids are namespaced by issuer
+
+`Principal.owner_id` is `{issuer}:{subject}`, not `subject`. Two providers can both mint
+`sub: "12345"`; without namespacing, adding a second identity provider would silently merge two
+people and one would inherit the other's datasets. Unnamespaced when no issuer is configured, which
+is what keeps the existing `local` ownership readable rather than orphaning every row on upgrade.
+
+### 25.6 Fail closed
+
+An interceptor that raises an unexpected exception produces a 503, not a request. Failing open would
+be the worst available outcome: every route would run, and `current_owner` would be the only thing
+between a stranger and somebody's data.
+
+`/health` stays public so an orchestrator can check liveness without credentials; it reports that
+the service is up and how deep the queue is, and nothing about anyone's data. `/metrics` — the
+metric *plugin* catalogue, not Prometheus — stopped being public. Nothing needs it before signing
+in, and "authenticated unless there is a reason" is the default that stays safe as endpoints are
+added.
+
+CORS was revisited, as §19's comment required once auth existed. Origins are now configurable and
+still default to `*`, which is **not** the hazard it would be with cookies: credentials are bearer
+tokens, which a browser never attaches by itself, so a hostile page can reach this API but has
+nothing to send. CORS is not what protects the data here — the token is. `allow_credentials` stays
+false deliberately; turning it on would mean cookie auth and the CSRF that comes with it.
+
+### 25.7 What this is not
+
+**This is a resource server, not an OAuth provider.** It *validates* tokens an OAuth provider
+issued; it does not run the authorization-code flow, hold client secrets, redirect anybody, or
+refresh anything. That half belongs to the frontend or to PHYLOViZ. The distinction matters for
+planning: "supports Google sign-in" is this plus a frontend that obtains the token.
+
+**Nothing is authorised by scope.** `Principal.scopes` is parsed and carried but no route consults
+it. Authorisation here is ownership — `owner_id` on the row — and that is checked in the database.
+Scopes would be a second, weaker mechanism for the same question.
+
+**There is no user table, and no revocation.** A token is valid until it expires; there is no
+session to end. Short token lifetimes are the mitigation, which is the provider's setting rather
+than ours.
+
 ## Findings carried forward
 
 Observations made during milestone 1 that constrain later work.

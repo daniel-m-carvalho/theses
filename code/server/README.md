@@ -34,6 +34,36 @@ the API serves it without one; an upload, though, is accepted and left `pending`
 picks it up, so without one nothing ever leaves that state. `GET /api/v1/health` reports the queue
 depth, which is how that looks from outside.
 
+### Authentication
+
+Out of the box the server runs the **mock interceptor**: every request is treated as one hardcoded
+user and nothing is checked, so the demo works with no identity provider and no configuration. It
+logs a warning at startup while that is on, and `GET /api/v1/me` reports `"mock": true` so a client
+can say so rather than presenting a demo user as signed in.
+
+Authentication is **middleware, in front of every route** — not a check each handler remembers to
+make. Only `/api/v1/health` and the documentation routes are public, and that list lives in one
+place (`api/auth/middleware.py`). Route handlers contain no auth logic at all; they ask for an owner
+id and receive one.
+
+For real authentication:
+
+```sh
+export PHYLODELTA_AUTH=jwt
+export PHYLODELTA_JWT_ISSUER=https://accounts.google.com
+export PHYLODELTA_JWT_AUDIENCE=<this service's client id>
+export PHYLODELTA_JWT_JWKS_URL=https://www.googleapis.com/oauth2/v3/certs   # RS256
+# or, for a shared secret (>= 32 bytes):
+# export PHYLODELTA_JWT_SECRET=... PHYLODELTA_JWT_ALGORITHMS=HS256
+```
+
+Clients then send `Authorization: Bearer <token>`. Incomplete configuration is refused **at
+startup**, not per request.
+
+**Integrating with PHYLOViZ** means writing one class — an `Interceptor` that validates PHYLOViZ's
+tokens — and selecting it in `api/auth/interceptors.py`. Routes, business logic and data models do
+not change, because none of them can see which interceptor is running.
+
 ### The native extension is optional
 
 `./native/build.sh` fetches sdsl-lite v3 (header-only, BSD-3-Clause) and compiles one file with

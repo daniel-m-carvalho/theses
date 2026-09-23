@@ -14,6 +14,24 @@ services:
       # 0 means one thread per core for the correspondence search. Set a
       # number on a shared machine, where taking every core is unneighbourly.
       PHYLODELTA_THREADS: "0"
+      # --- authentication -------------------------------------------------
+      # `mock` attaches a hardcoded user to every request and checks nothing,
+      # so the demo runs with no identity provider. It is opt-in and the
+      # service logs a warning at startup while it is on.
+      #
+      # For real authentication set PHYLODELTA_AUTH=jwt and supply the issuer,
+      # the audience, and either a JWKS URL (RS256 — Google, an institutional
+      # IdP, PHYLOViZ) or a shared secret of at least 32 bytes (HS256). The
+      # service refuses to start if these are incomplete, rather than running
+      # in an undefined auth state.
+      #
+      #   PHYLODELTA_AUTH: jwt
+      #   PHYLODELTA_JWT_ISSUER: https://accounts.google.com
+      #   PHYLODELTA_JWT_AUDIENCE: <this service's client id>
+      #   PHYLODELTA_JWT_JWKS_URL: https://www.googleapis.com/oauth2/v3/certs
+      PHYLODELTA_AUTH: "${PHYLODELTA_AUTH:-mock}"
+      # Narrow this to the frontend's origin once it is known.
+      PHYLODELTA_CORS_ORIGINS: "${PHYLODELTA_CORS_ORIGINS:-*}"
     volumes:
       # The store is derived and rebuildable, but recomputing it costs minutes
       # to hours, so it is kept rather than discarded with the container.

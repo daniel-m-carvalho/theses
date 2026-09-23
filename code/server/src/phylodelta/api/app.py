@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import os
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import errors
+from .auth import PUBLIC_PATHS, AuthenticationMiddleware, mode, select
 from .errors import ErrorResponse
 from .routes_comparisons import router as comparisons_router
 from .routes_isolates import router as isolates_router
@@ -101,14 +105,31 @@ TAGS = [
 #: rather than discovering it by failing.
 ERROR_RESPONSES = {
     400: {"model": ErrorResponse, "description": "The request cannot be answered as asked."},
+    401: {"model": ErrorResponse, "description": "Missing, expired or invalid credentials."},
     404: {"model": ErrorResponse, "description": "No such tree, pair, metric, species or node."},
     413: {"model": ErrorResponse, "description": "An uploaded file is larger than this server accepts."},
     422: {"model": ErrorResponse, "description": "A parameter or body value is not usable."},
 }
 
 
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    """Startup work.
+
+    The listing reads comparison rows (§24.7), so the API needs its tables to
+    exist even on a store nothing has been written to yet. Without this a fresh
+    deployment answers /health happily and 500s on /datasets, which is the
+    least helpful pair of answers available.
+    """
+    from .. import db
+
+    db.create_schema()
+    yield
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
+        lifespan=_lifespan,
         title="PhyloDelta",
         version=API_VERSION,
         summary="Sliced delivery of large phylogenetic tree comparisons.",
@@ -119,16 +140,39 @@ def create_app() -> FastAPI:
         responses=ERROR_RESPONSES,
     )
 
+    # Built here rather than left to the middleware, because Starlette
+    # assembles its stack lazily on the first request: a misconfigured JWT
+    # setup would otherwise start cleanly and fail per-request, which is the
+    # worst moment to discover it. This way the process refuses to start.
+    interceptor = select()
+
+    # Authentication, before anything routes. Added before CORS so that CORS
+    # ends up the outer layer: a preflight carries no credentials by design,
+    # and refusing it would surface in the browser as a CORS failure instead
+    # of the 401 the real request is about to get.
+    app.add_middleware(AuthenticationMiddleware, interceptor=interceptor)
+
     # The frontend is a separate origin in development (Vite on :5173) and may
-    # be a static bundle elsewhere in production. Every endpoint is a read over
-    # public research data and none accepts credentials, so a permissive
-    # read-only policy is the honest setting rather than a lax one. If
-    # authentication is ever added, this must be narrowed in the same change:
-    # `allow_credentials=True` with `allow_origins=["*"]` is refused by browsers
-    # anyway, which is a useful tripwire.
+    # be a static bundle elsewhere in production.
+    #
+    # `*` is the default and is not the hazard it would be with cookies.
+    # Credentials are bearer tokens, which a browser never attaches on its own,
+    # so a hostile page can reach this API but has nothing to send — CORS is
+    # not what protects the data here; the token is. Narrow it anyway once the
+    # frontend's origin is known, via PHYLODELTA_CORS_ORIGINS, because a
+    # smaller surface is still worth having.
+    #
+    # `allow_credentials` stays False deliberately. Turning it on with `*` is
+    # refused by browsers, and turning it on at all would mean cookie auth,
+    # which brings CSRF that bearer tokens do not have.
+    origins = [
+        origin.strip()
+        for origin in os.environ.get("PHYLODELTA_CORS_ORIGINS", "*").split(",")
+        if origin.strip()
+    ]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=origins,
         allow_credentials=False,
         allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["*"],
@@ -144,7 +188,51 @@ def create_app() -> FastAPI:
         isolates_router,
     ):
         app.include_router(router)
+
+    _document_security(app)
     return app
+
+
+def _document_security(app: FastAPI) -> None:
+    """Advertise the bearer scheme in the OpenAPI document.
+
+    Authentication is middleware, so FastAPI cannot infer it from the route
+    signatures — without this the generated contract would show an API that
+    needs no credentials, and whoever writes the client would find out by
+    getting 401s. Applied globally with the public paths carved out, which is
+    the same shape as the middleware's own rule.
+    """
+    generated = app.openapi
+
+    def with_security():
+        document = generated()
+        if "PhyloDeltaBearer" in document.get("components", {}).get(
+            "securitySchemes", {}
+        ):
+            return document
+        document.setdefault("components", {}).setdefault("securitySchemes", {})[
+            "PhyloDeltaBearer"
+        ] = {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+            "description": (
+                "A JWT issued by the identity provider this deployment trusts. "
+                "In the demo the mock interceptor is active and any request is "
+                "accepted, whatever it carries."
+            ),
+        }
+        for path, operations in document.get("paths", {}).items():
+            if path in PUBLIC_PATHS:
+                continue
+            for operation in operations.values():
+                if isinstance(operation, dict):
+                    operation.setdefault("security", [{"PhyloDeltaBearer": []}])
+        document["info"]["x-authentication-mode"] = mode()
+        app.openapi_schema = document
+        return document
+
+    app.openapi = with_security
 
 
 app = create_app()

@@ -1,91 +1,61 @@
 """Who a request is for.
 
-**This is the only place that answers that question**, and it is deliberately
-one function. Whether identity comes from a token PhyloViz issued or from
-accounts PhyloDelta keeps itself is not decided (§19.5), and every endpoint
-downstream needs the same thing regardless: an opaque owner id. Putting the
-decision behind a dependency means resolving it changes this module and nothing
-else — rather than the eight endpoints that consume it.
+**This is still the only place that answers that question** — it just no longer
+does the work. Authentication happens once, in `auth.AuthenticationMiddleware`,
+before routing; what remains here is the dependency routes use to read the
+answer.
 
-Three modes, chosen by ``PHYLODELTA_AUTH``:
+That split is the point. A route asks for `owner: str = Depends(current_owner)`
+and gets an opaque id. It does not know whether a token was verified, a header
+was trusted, or a mock returned a constant, and it cannot be made to care.
+Replacing the interceptor — with one that validates PHYLOViZ's tokens, for
+instance — changes `auth/interceptors.py` and nothing else: no route, no
+service, no model.
 
-``none`` (default)
-    Every request belongs to a single fixed owner. This is what the current
-    single-operator deployment is — `build-all` writes, the API reads, and
-    there is nobody to distinguish. It keeps the system runnable with no
-    identity provider at all, which is what `uv sync` and a directory buys.
-
-``header``
-    The owner id is read from a header, trusted as given. **Not
-    authentication** — anyone can set a header — but it makes multi-tenant
-    behaviour testable and lets a frontend be developed against it before the
-    identity question is settled. Refused unless explicitly enabled.
-
-``token``
-    The intended production mode: verify a signed token and take its subject.
-    Deliberately unimplemented rather than half-implemented — a verifier that
-    does not verify is worse than an honest error, because it looks like
-    security.
+`current_owner` keeps its name and its shape from before the middleware
+existed, so the eight endpoints that already depend on it were not touched.
 """
 
 from __future__ import annotations
 
-import os
-
-from fastapi import Header
+from fastapi import Request
 
 from . import errors
+from .auth import AUTH_HEADER, MOCK_SUBJECT, Principal, mode
 
-#: The owner everything belongs to when authentication is off. A recognisable
-#: constant, so data created in this mode is obvious in the database rather
-#: than looking like a real account.
-SINGLE_OWNER = "local"
+#: Retained under its original name: the offline pipeline attributes what it
+#: builds to this owner, and the mock interceptor resolves to the same value,
+#: so a catalogue built by `build-all` is readable by the demo.
+SINGLE_OWNER = MOCK_SUBJECT
 
-AUTH_HEADER = "X-PhyloDelta-Owner"
-
-
-def mode() -> str:
-    return os.environ.get("PHYLODELTA_AUTH", "none").strip().lower() or "none"
+__all__ = ["AUTH_HEADER", "SINGLE_OWNER", "current_owner", "current_principal", "mode"]
 
 
-async def current_owner(
-    owner_header: str | None = Header(default=None, alias=AUTH_HEADER),
-    authorization: str | None = Header(default=None),
-) -> str:
+def current_principal(request: Request) -> Principal:
+    """The authenticated caller.
+
+    For anything that needs more than an id — an endpoint reporting who you
+    are, or a log line. Most routes want `current_owner`.
+    """
+    principal = getattr(request.state, "principal", None)
+    if principal is None:
+        # Only reachable if the middleware is missing, which would mean
+        # unauthenticated requests are reaching routes. Refuse loudly rather
+        # than invent an owner: inventing one would silently serve somebody
+        # else's data.
+        raise errors.ApiError(
+            500,
+            "auth_not_installed",
+            "This request reached a route without being authenticated.",
+            "AuthenticationMiddleware is not installed on this application.",
+        )
+    return principal
+
+
+def current_owner(request: Request) -> str:
     """The opaque id of the owner this request is for.
 
     Returns an id or raises; never returns None, so no caller has to decide
     what an absent owner means.
     """
-    active = mode()
-
-    if active == "none":
-        return SINGLE_OWNER
-
-    if active == "header":
-        if not owner_header:
-            raise errors.ApiError(
-                401,
-                "owner_required",
-                f"This server identifies requests by the {AUTH_HEADER} header "
-                "and none was sent.",
-                f"Send {AUTH_HEADER}: <owner id>.",
-            )
-        return owner_header.strip()
-
-    if active == "token":
-        raise errors.ApiError(
-            501,
-            "auth_not_implemented",
-            "Token authentication is configured but not implemented.",
-            "Whether tokens are issued by PhyloViz or by this service is not "
-            "yet decided; until it is, run with PHYLODELTA_AUTH=none or "
-            "=header. A verifier that does not verify would be worse than "
-            "this error.",
-        )
-
-    raise errors.ApiError(
-        500,
-        "auth_misconfigured",
-        f"PHYLODELTA_AUTH is {active!r}; expected 'none', 'header' or 'token'.",
-    )
+    return current_principal(request).owner_id

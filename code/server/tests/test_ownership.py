@@ -8,6 +8,8 @@ exactly one answer-site. The identity *source* is undecided (DECISIONS.md
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -138,17 +140,18 @@ def test_header_mode_requires_the_header(store, monkeypatch):
     assert response.json()["code"] == "owner_required"
 
 
-def test_token_mode_refuses_rather_than_pretending(store, monkeypatch):
-    """A verifier that does not verify would look like security."""
-    response = client_for(monkeypatch, "token").get("/api/v1/datasets")
-    assert response.status_code == 501
-    assert response.json()["code"] == "auth_not_implemented"
+def test_a_misconfigured_mode_fails_at_startup(store, monkeypatch):
+    """At boot, not on the first request that needed it.
 
+    An unknown mode used to return 500 per request. Building the interceptor
+    when the application is created means the process refuses to start instead
+    of serving traffic in an undefined auth state.
+    """
+    from phylodelta.api.app import create_app
 
-def test_a_misconfigured_mode_fails_loudly(store, monkeypatch):
-    response = client_for(monkeypatch, "sometimes").get("/api/v1/datasets")
-    assert response.status_code == 500
-    assert response.json()["code"] == "auth_misconfigured"
+    monkeypatch.setenv("PHYLODELTA_AUTH", "sometimes")
+    with pytest.raises(RuntimeError, match="expected 'mock', 'header' or 'jwt'"):
+        create_app()
 
 
 # --- the listing is owner-scoped end to end --------------------------------
@@ -281,30 +284,58 @@ def test_errors_do_not_enumerate_other_owners_data(two_owners):
         assert "vibrio" not in text and "clostridium" not in text, url
 
 
-def test_health_and_metrics_stay_global(two_owners):
-    """Neither serves owned data, so neither should demand an owner."""
+def test_only_health_is_public(two_owners):
+    """`/health` answers without credentials; everything else does not.
+
+    `/metrics` used to be public too. It lists which metric plugins are
+    registered — server capability, not anyone's data — but nothing needs it
+    before signing in, and a default of "authenticated unless there is a
+    reason" is the one that stays safe as endpoints are added.
+    """
     assert two_owners.get("/api/v1/health").status_code == 200
-    assert two_owners.get("/api/v1/metrics").status_code == 200
+    assert two_owners.get("/api/v1/metrics").status_code == 401
 
 
-def test_every_data_endpoint_declares_an_owner():
-    """A guard against adding an endpoint and forgetting to scope it.
+def test_no_route_can_be_reached_without_a_principal(two_owners):
+    """The invariant the middleware exists to provide.
 
-    One was missed while threading ownership through — the comparison slice —
-    and an audit caught it where reading the diff had not.
+    This replaces an audit that read the OpenAPI document looking for an owner
+    parameter on every operation. That was a *proxy* for the property — it
+    checked that each route remembered to ask — and the thing it was guarding
+    against had already happened once (§22.3: the comparison slice was missed).
+
+    With authentication in front of routing, the property can be tested
+    directly: call every route the application declares, with nothing, and
+    require a refusal. A new endpoint is covered the moment it exists, and
+    making one public means adding it to PUBLIC_PATHS, which is visible.
     """
     from phylodelta.api.app import create_app
+    from phylodelta.api.auth import PUBLIC_PATHS
 
-    unscoped = {
-        f"{method.upper()} {path}"
-        for path, operations in create_app().openapi()["paths"].items()
-        for method, operation in operations.items()
-        if not any(
-            p.get("name") == "X-PhyloDelta-Owner"
-            for p in operation.get("parameters", [])
-        )
-    }
-    assert unscoped == {"GET /api/v1/health", "GET /api/v1/metrics"}
+    document = create_app().openapi()
+    checked = 0
+    for path, operations in document["paths"].items():
+        # A concrete value for each {placeholder}; what matters is the status,
+        # and authentication is decided before the path is ever resolved.
+        url = re.sub(r"\{[^}]+\}", "probe__probe", path)
+        for method in operations:
+            if method.upper() not in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
+                continue
+            response = two_owners.request(method.upper(), url)
+            if path in PUBLIC_PATHS:
+                assert response.status_code != 401, f"{method} {path} should be public"
+                continue
+            assert response.status_code == 401, f"{method} {path} was reachable"
+            assert response.json()["code"] == "owner_required"
+            checked += 1
+    assert checked >= 10, "the suite should be covering every data route"
+
+
+def test_a_refusal_says_how_to_authenticate(two_owners):
+    """So a client library knows what to present rather than guessing."""
+    response = two_owners.get("/api/v1/datasets")
+    assert response.status_code == 401
+    assert response.headers["WWW-Authenticate"] == "Bearer"
 
 
 # --- schema changes over a populated database -------------------------------
