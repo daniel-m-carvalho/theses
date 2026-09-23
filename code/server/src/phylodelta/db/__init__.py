@@ -10,6 +10,9 @@ from .models import (
 )
 from .queries import (
     comparison_by_id,
+    datasets_no_longer_used,
+    delete_comparison_row,
+    delete_datasets,
     comparison_for,
     comparisons_for,
     dataset_for,
@@ -37,6 +40,9 @@ __all__ = [
     "DatasetKind",
     "DatasetStatus",
     "comparison_by_id",
+    "datasets_no_longer_used",
+    "delete_comparison_row",
+    "delete_datasets",
     "comparison_for",
     "comparisons_for",
     "create_schema",

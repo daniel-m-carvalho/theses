@@ -26,7 +26,7 @@ import traceback
 from contextlib import contextmanager
 from pathlib import Path
 
-from .. import config, db, uploads
+from .. import config, db, retention, uploads
 from ..db import jobs as queue
 from ..isolates.ingest import ingest_species
 from .pipeline import NotComparable, compute_pair, ingest_tree_file, load_metrics
@@ -67,8 +67,12 @@ def _heartbeat(comparison_id: str, worker: str):
         thread.join(timeout=5)
 
 
-def run_comparison(comparison_id: str, metrics: list[str] | None = None) -> None:
-    """Do the work for one claimed comparison. Raises on failure."""
+def run_comparison(comparison_id: str, metrics: list[str] | None = None) -> tuple[str, str]:
+    """Do the work for one claimed comparison. Raises on failure.
+
+    Returns the two dataset ids it built, so the caller can clean them up if
+    the comparison was deleted while this was running.
+    """
     store = Path(config.STORE_DIR)
     record = db.comparison_by_id(comparison_id)
     if record is None:
@@ -127,6 +131,7 @@ def run_comparison(comparison_id: str, metrics: list[str] | None = None) -> None
     )
     for line in computed.report_lines:
         print(line, flush=True)
+    return (record.left_id, record.right_id)
 
 
 def process_next(worker: str | None = None, metrics: list[str] | None = None) -> bool:
@@ -144,7 +149,7 @@ def process_next(worker: str | None = None, metrics: list[str] | None = None) ->
     print(f"--- {comparison_id} claimed by {who}", flush=True)
     try:
         with _heartbeat(comparison_id, who):
-            run_comparison(comparison_id, metrics)
+            built = run_comparison(comparison_id, metrics)
     except NotComparable as exc:
         # A definite answer, not a fault: these two trees share no labels.
         # Failing with the reason beats retrying something that cannot succeed.
@@ -157,9 +162,22 @@ def process_next(worker: str | None = None, metrics: list[str] | None = None) ->
         traceback.print_exc()
         return True
 
+    # A comparison can be deleted while it is being computed — this takes
+    # minutes on a large pair. Delete wins: the row is already gone, so
+    # everything just written is unreachable and would otherwise sit on disk
+    # with nothing referring to it.
+    if db.comparison_by_id(comparison_id) is None:
+        retention.remove_orphaned_stores(comparison_id, built)
+        print(f"--- {comparison_id} was deleted while running; discarded", flush=True)
+        return True
+
     queue.finish(comparison_id)
+    # The raw bundle is ~69% of a stored comparison and redundant once
+    # ingested. Kept only when the job failed, where it is the evidence.
+    freed = retention.discard_bundle(comparison_id)
     print(
-        f"--- {comparison_id} ready in {time.perf_counter() - started:,.1f} s",
+        f"--- {comparison_id} ready in {time.perf_counter() - started:,.1f} s"
+        + (f", {freed / 1024 / 1024:,.1f} MB of upload discarded" if freed else ""),
         flush=True,
     )
     return True

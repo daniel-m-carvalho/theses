@@ -2537,6 +2537,76 @@ Scopes would be a second, weaker mechanism for the same question.
 session to end. Short token lifetimes are the mitigation, which is the provider's setting rather
 than ours.
 
+## 26. Retention: discard on success, delete on request, no clock
+
+§23 and §24 both ended with the same gap — nothing ever removed anything. Settled with the user
+(2026-09-23), now that the deployment is known: **a university VM with a container volume.**
+
+### 26.1 What was actually accumulating
+
+Measured on one real vibrio comparison (17,645 leaves per tree), end to end:
+
+| | |
+|---|---|
+| `uploads/` — the raw files posted | **9.7 MB** |
+| `trees/` — the ingested columnar stores | 1.7 MB |
+| `isolates/` | 1.5 MB |
+| `pairs/` — correspondence + RF | 640 KB |
+| database | 44 KB |
+| **total** | **14 MB** |
+
+**69% of a stored comparison was the raw upload**, and it is redundant: the store can regenerate
+Newick (`newick_writer.to_newick`, which `materialise` already uses to feed TreeDiff). Keeping it
+buys byte-exact provenance of the submission, not the ability to recompute — adding the triplet
+metric later needs the *store*, not the original file.
+
+So a successful job discards its bundle. A **failed** job keeps it, because there the original file
+is the evidence of what went wrong.
+
+Measured after the change: 14 MB → **4.0 MB** on success, and 272 KB after deletion — which is the
+SQLite file and its WAL, with every data directory empty and no rows left.
+
+### 26.2 No expiry clock, and no quota
+
+The user's call, and the right one for this deployment. A comparison lives until somebody deletes
+it.
+
+An automatic sweep trades one failure mode for another, and on a single research VM the trade is
+bad: unbounded growth is a disk that needs attention, which is visible and recoverable; a timer is a
+result vanishing from under the work that was about to cite it, which is neither. Quotas are
+recorded under *Deferred by decision* — the user does not need them for the thesis, and sizing one
+needs usage that does not exist yet.
+
+That makes `DELETE /api/v1/comparisons/{id}` **the only way data leaves**, which is why it removes
+the derived stores and not merely the rows. Deleting the row alone would leave the expensive half on
+disk — the exact problem this section exists to fix.
+
+### 26.3 Deletion is owner-scoped, ordered, and does not free shared data
+
+**Same 404 for "not yours" as for "no such id"**, so deleting cannot be used to probe for existence
+any more than reading can (§22.1).
+
+**The comparison row goes first**, because the dataset rows carry foreign keys to it; then the
+datasets nothing else refers to; then the files. A crash between those steps leaves files with no
+rows, which is inert. The opposite order would leave rows pointing at data that is gone, which is
+not.
+
+**A tree another comparison still uses is kept.** Today nothing shares a tree — every upload mints
+fresh ids — so the check always frees both. It is written as a real reference check anyway, because
+the moment comparing two already-owned datasets lands (also deferred), the naive version would
+delete the other comparison's data.
+
+### 26.4 Delete wins over a running job
+
+A comparison can be deleted while a worker is computing it; on a 500k-node pair that window is
+minutes. Refusing the delete was the simpler option and was rejected — it strands the user behind
+their own long job.
+
+Instead the worker re-checks the row after computing and before recording success. If it has gone,
+it discards what it built and moves on. Anything else would finish into a comparison nobody can
+reach, leaving its stores on disk with nothing referring to them: exactly the orphan this section
+is about, created by the code meant to prevent it.
+
 ## Findings carried forward
 
 Observations made during milestone 1 that constrain later work.
@@ -2681,6 +2751,12 @@ files; there is no way to say "compare these two ids". A user who uploads pair A
 compare A's left tree against B's. §24.7 removed the listing that implied otherwise, since it
 advertised pairs nobody could request. The pieces are all there — `compute_pair` takes two stored
 ids — so this is an endpoint and a queue entry, not new machinery.
+
+**Quotas and disk limits** — nothing bounds how much one owner may store. Deliberate (user,
+2026-09-23): not needed for the thesis, and sizing a quota needs usage that does not exist yet. The
+pieces it would attach to are in place — `datasets_for` gives an owner's holdings, and
+`retention.remove_comparison` reports bytes freed, so a running total is a query rather than new
+bookkeeping.
 
 **Other deferrals** carried from earlier sections: the succinct representation (§2.1, after
 correctness); the subprocess metric kind (§3.5, contract defined, not wired); a crosswalk between

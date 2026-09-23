@@ -219,3 +219,58 @@ def record_computed_pair(
         existing.status = ComparisonStatus.READY
         existing.error = None
         existing.finished_at = _utcnow()
+
+
+def delete_comparison_row(owner_id: str, comparison_id: str) -> tuple[str, str] | None:
+    """Remove a comparison, **only if this owner has it**.
+
+    Returns the two dataset ids it referred to, so the caller can decide what
+    else is now unreachable. Returns None for "not yours" as well as "does not
+    exist", like every other owner-scoped lookup.
+
+    The row goes first: the datasets have foreign keys pointing at it, so they
+    cannot be removed while it is there.
+    """
+    with session() as active:
+        found = active.get(Comparison, comparison_id)
+        if found is None or found.owner_id != owner_id:
+            return None
+        pair = (found.left_id, found.right_id)
+        active.delete(found)
+        return pair
+
+
+def datasets_no_longer_used(dataset_ids: tuple[str, ...]) -> list[str]:
+    """Which of these are referenced by no remaining comparison.
+
+    Today every uploaded tree belongs to exactly one comparison, so this always
+    returns all of them. It is written as a real check anyway, because the
+    moment two comparisons can share a tree — comparing datasets you already
+    own, recorded as future work — deleting one would otherwise delete the
+    other's data.
+    """
+    if not dataset_ids:
+        return []
+    with session() as active:
+        still_used = set(
+            active.scalars(
+                select(Comparison.left_id).where(Comparison.left_id.in_(dataset_ids))
+            )
+        ) | set(
+            active.scalars(
+                select(Comparison.right_id).where(Comparison.right_id.in_(dataset_ids))
+            )
+        )
+        return [i for i in dataset_ids if i not in still_used]
+
+
+def delete_datasets(dataset_ids: list[str]) -> None:
+    """Remove dataset rows, and any isolate rows derived from them."""
+    if not dataset_ids:
+        return
+    derived = [f"isolates-{i}" for i in dataset_ids]
+    with session() as active:
+        for found in active.scalars(
+            select(Dataset).where(Dataset.id.in_(dataset_ids + derived))
+        ):
+            active.delete(found)

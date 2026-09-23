@@ -34,6 +34,16 @@ the API serves it without one; an upload, though, is accepted and left `pending`
 picks it up, so without one nothing ever leaves that state. `GET /api/v1/health` reports the queue
 depth, which is how that looks from outside.
 
+### What is kept, and what is removed
+
+A successful job **discards the raw upload** it was built from — 69% of a stored comparison, and
+redundant once ingested, since the store can regenerate Newick. A failed job keeps its bundle,
+because there the original file is the evidence.
+
+Nothing else is removed automatically: **there is no expiry clock and no quota.** A comparison lives
+until `DELETE /api/v1/comparisons/{id}`, which removes the derived stores as well as the rows, and
+keeps any tree another comparison still uses.
+
 ### Authentication
 
 Out of the box the server runs the **mock interceptor**: every request is treated as one hardcoded

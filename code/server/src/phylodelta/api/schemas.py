@@ -512,3 +512,22 @@ class WhoAmI(BaseModel):
             "should say so rather than presenting a demo user as signed in."
         )
     )
+
+
+class ComparisonRemoved(BaseModel):
+    """What a deletion took away.
+
+    Reports the bytes rather than returning 204, so a client can tell the user
+    what happened and an operator can see a disk being reclaimed. There is no
+    expiry clock, so this is the only way data leaves.
+    """
+
+    id: str
+    datasets_removed: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Trees removed with it — those no comparison still refers to. A "
+            "tree shared with another comparison is kept."
+        ),
+    )
+    bytes_freed: int = Field(description="Total size of the directories removed.")

@@ -22,11 +22,11 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, File, Form, Path, UploadFile, status
 
-from .. import db, uploads
+from .. import db, retention, uploads
 from . import errors
 from .identity import current_owner
 from .routes_meta import API_PREFIX
-from .schemas import ComparisonStatusResponse, UploadAccepted
+from .schemas import ComparisonRemoved, ComparisonStatusResponse, UploadAccepted
 
 router = APIRouter(prefix=f"{API_PREFIX}/comparisons", tags=["comparisons"])
 
@@ -167,4 +167,43 @@ def comparison_status(
         finished_at=_isoformat(record.finished_at),
         error=record.error,
         ready=record.status is db.ComparisonStatus.READY,
+    )
+
+
+@router.delete(
+    "/{comparison_id}",
+    response_model=ComparisonRemoved,
+    summary="Delete a comparison and the data only it was using.",
+)
+def delete_comparison(
+    owner: str = Depends(current_owner),
+    comparison_id: str = Path(description="The comparison to remove."),
+) -> ComparisonRemoved:
+    """Remove a comparison, its trees and its typing data.
+
+    **This is the only way data leaves.** There is no expiry clock and no
+    quota: a comparison lives until someone deletes it (§26). A sweep that
+    removed results on a timer would risk taking one out from under work in
+    progress, which on a single research VM is the worse failure.
+
+    Removes the derived stores as well as the rows — removing the row alone
+    would leave the expensive half on disk, which is the problem this solves.
+    Trees still referenced by another comparison are kept.
+
+    Deleting a comparison that is **currently being computed** is allowed. The
+    worker notices its row has gone and discards what it built, rather than
+    finishing into a comparison nobody can reach.
+    """
+    removed = retention.remove_comparison(owner, comparison_id)
+    if removed is None:
+        # The same 404 a stranger gets, so deletion cannot probe for existence.
+        raise errors.not_found(
+            "comparison_not_found",
+            f"No comparison {comparison_id!r}.",
+            "GET /api/v1/datasets lists what you have.",
+        )
+    return ComparisonRemoved(
+        id=removed.comparison_id,
+        datasets_removed=removed.datasets,
+        bytes_freed=removed.bytes_freed,
     )
