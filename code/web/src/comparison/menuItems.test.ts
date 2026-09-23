@@ -23,6 +23,7 @@ function sideOf(over: Partial<SideState> = {}): SideState {
     tree,
     gradient: gradientFrom(tree, slice.comparison),
     budget: DEFAULT_BUDGET,
+    autoBudget: DEFAULT_BUDGET,
     loading: false,
     error: null,
     path: [],

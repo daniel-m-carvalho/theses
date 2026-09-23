@@ -17,7 +17,7 @@
  */
 
 import type { MenuItem, MenuPosition } from "../menu/ContextMenu";
-import { DEFAULT_BUDGET, EXPAND_ALL_LIMIT, type SideActions, type SideState } from "./useSide";
+import { EXPAND_ALL_LIMIT, type SideActions, type SideState } from "./useSide";
 
 export interface PendingMenu {
   side: 0 | 1;
@@ -121,7 +121,7 @@ export function buildMenu(
     onSelect: here.canGoBack ? act.back : undefined,
   });
 
-  const atOriginal = !here.canGoBack && here.budget === DEFAULT_BUDGET;
+  const atOriginal = !here.canGoBack && here.budget === here.autoBudget;
   items.push({
     label: "Reset to the whole tree",
     disabledBecause: atOriginal ? "already showing it" : undefined,

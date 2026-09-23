@@ -21,7 +21,7 @@ import {
 import type { PairSummary } from "../api/types";
 import { ContextMenu } from "../menu/ContextMenu";
 import { buildMenu, menuTitle, type PendingMenu } from "./menuItems";
-import { useSide, type SideActions, type SideState } from "./useSide";
+import { readableBudget, useSide, type SideActions, type SideState } from "./useSide";
 
 /**
  * Panels are identical except for their label: the same budget, the same
@@ -83,8 +83,14 @@ export function ComparisonView({
   initial?: { left: number[]; right: number[] };
   onNavigate?: (left: number[], right: number[]) => void;
 }) {
-  const [left, leftActions] = useSide(pair.left, pair.id, "rf", initial?.left);
-  const [right, rightActions] = useSide(pair.right, pair.id, "rf", initial?.right);
+  // Both panels are the same height, so one measurement serves both — and
+  // both must ask for the same detail or the two sides stop being comparable
+  // by eye, which is the entire task.
+  const [panelHeight, setPanelHeight] = useState(0);
+  const autoBudget = readableBudget(panelHeight);
+
+  const [left, leftActions] = useSide(pair.left, pair.id, "rf", initial?.left, autoBudget);
+  const [right, rightActions] = useSide(pair.right, pair.id, "rf", initial?.right, autoBudget);
 
   const leftHost = useRef<HTMLDivElement>(null);
   const rightHost = useRef<HTMLDivElement>(null);
@@ -192,6 +198,18 @@ export function ComparisonView({
   useEffect(() => {
     onNavigate?.(left.path, right.path);
   }, [left.path, right.path, onNavigate]);
+
+  // Re-measure on resize, so the detail tracks the window rather than a
+  // constant chosen for whatever window it was written on.
+  useEffect(() => {
+    const host = leftHost.current;
+    if (!host || typeof ResizeObserver === "undefined") return;
+    const measure = () => setPanelHeight(host.clientHeight);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, []);
 
   const dismiss = useCallback(() => setMenu(null), []);
 
