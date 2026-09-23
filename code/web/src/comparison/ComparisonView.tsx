@@ -20,6 +20,8 @@ import {
 } from "phylo-tree-viewer";
 import type { PairSummary } from "../api/types";
 import { ContextMenu } from "../menu/ContextMenu";
+import { TypingLegend } from "../typing/TypingLegend";
+import { datumFor, useTypingData } from "../typing/useTypingData";
 import { buildMenu, menuTitle, type PendingMenu } from "./menuItems";
 import {
   PIXELS_PER_LEAF,
@@ -81,6 +83,10 @@ const CONFIG: Config = {
         expandCollapse: false,
         selection: { enabled: true },
         cladeShape: { ...CLADE_SHAPE },
+        // Attached always, enabled on demand: the presenter can be switched
+        // without rebuilding the panels, and a leaf with no datum simply gets
+        // no bar.
+        barcharts: { enabled: false, scale: "log" },
       },
     },
     {
@@ -92,6 +98,7 @@ const CONFIG: Config = {
         expandCollapse: false,
         selection: { enabled: true },
         cladeShape: { ...CLADE_SHAPE },
+        barcharts: { enabled: false, scale: "log" },
       },
     },
   ],
@@ -116,10 +123,15 @@ export function ComparisonView({
   pair,
   initial,
   onNavigate,
+  isolateSets = [null, null],
+  showTyping = false,
 }: {
   pair: PairSummary;
   initial?: { left: number[]; right: number[] };
   onNavigate?: (left: number[], right: number[]) => void;
+  /** Isolate-set id per side; null where that tree has no typing data. */
+  isolateSets?: [string | null, string | null];
+  showTyping?: boolean;
 }) {
   // Both panels are the same height, so one measurement serves both — and
   // both must ask for the same detail or the two sides stop being comparable
@@ -129,6 +141,13 @@ export function ComparisonView({
 
   const [left, leftActions] = useSide(pair.left, pair.id, "rf", initial?.left, autoBudget);
   const [right, rightActions] = useSide(pair.right, pair.id, "rf", initial?.right, autoBudget);
+
+  const [segmentBy, setSegmentBy] = useState<string | null>(null);
+  const leftTyping = useTypingData(isolateSets[0], left.tree, showTyping, segmentBy);
+  const rightTyping = useTypingData(isolateSets[1], right.tree, showTyping, segmentBy);
+  const typing = useRef([leftTyping, rightTyping]);
+  typing.current = [leftTyping, rightTyping];
+  const [swatches, setSwatches] = useState<ReadonlyMap<string, string>>(new Map());
 
   const leftHost = useRef<HTMLDivElement>(null);
   const rightHost = useRef<HTMLDivElement>(null);
@@ -208,6 +227,21 @@ export function ComparisonView({
           return next;
         });
       },
+      // Typing data for one leaf. Read through a ref so it follows the slice
+      // rather than staying whatever was loaded when the panels were built.
+      dataOf: (identifier: string) => {
+        const [l, r] = typing.current;
+        return datumFor(l.byLeaf.get(identifier) ?? r.byLeaf.get(identifier));
+      },
+      tooltipOf: (identifier: string, datum) => {
+        const [l, r] = typing.current;
+        const found = l.byLeaf.get(identifier) ?? r.byLeaf.get(identifier);
+        const hidden = found ? found.available - found.total : 0;
+        const total = datum.total ?? 0;
+        return `${identifier}: ${total.toLocaleString()} isolates${
+          hidden > 0 ? ` (+${hidden.toLocaleString()} unrecorded)` : ""
+        }`;
+      },
       // The provider is handed the node as well as the key; the node carries
       // the backend's id, which is the only identifier both sides agree on.
       // Keying by name would break on the unnamed internal nodes that make up
@@ -273,6 +307,45 @@ export function ComparisonView({
     onNavigate?.(left.path, right.path);
   }, [left.path, right.path, onNavigate]);
 
+  // Feed the bar charts, and keep the legend in step with the scale that is
+  // actually colouring them. The scale is primed with every category present
+  // so the legend is complete before a bar for that category is drawn.
+  useEffect(() => {
+    const built = handle.current;
+    if (!built) return;
+    const categories = [...new Set([...leftTyping.categories, ...rightTyping.categories])];
+    built.colorScale.prime(categories);
+    built.panels.forEach((panel, index) => {
+      const bars = panel.operators.barcharts;
+      if (!bars) return;
+      const source = index === 0 ? leftTyping : rightTyping;
+      const data = new Map<string, ReturnType<typeof datumFor> & object>();
+      for (const [leaf, composition] of source.byLeaf) {
+        const datum = datumFor(composition);
+        // Leaves with nothing are left out rather than passed as empty: an
+        // empty datum makes the library key the bar by the leaf's own name.
+        if (datum) data.set(leaf, datum);
+      }
+      bars.setData(data);
+      bars.setEnabled(showTyping);
+    });
+    // Built from the categories **currently** shown, not from every assignment
+    // the scale has ever made. The scale accumulates across segment keys and
+    // is never reset, so reading it wholesale left the legend listing "Human"
+    // and "Food" after switching to Continent.
+    //
+    // Only set when it actually changed: this is a fresh Map each time, so
+    // assigning it unconditionally is a state change on every render.
+    const next = new Map(
+      categories.map((category) => [category, built.colorScale.color(category)]),
+    );
+    setSwatches((current) =>
+      current.size === next.size && [...next].every(([k, v]) => current.get(k) === v)
+        ? current
+        : next,
+    );
+  }, [showTyping, leftTyping, rightTyping]);
+
   // Re-measure on resize, so the detail tracks the window rather than a
   // constant chosen for whatever window it was written on.
   useEffect(() => {
@@ -313,6 +386,17 @@ export function ComparisonView({
         <Panel host={leftHost} state={left} />
         <Panel host={rightHost} state={right} />
       </div>
+
+      {showTyping ? (
+        <TypingLegend
+          assignments={swatches}
+          segmentBy={leftTyping.segmentBy || rightTyping.segmentBy}
+          keys={leftTyping.keys.length ? leftTyping.keys : rightTyping.keys}
+          onSegmentBy={setSegmentBy}
+          loading={leftTyping.loading || rightTyping.loading}
+          error={leftTyping.error ?? rightTyping.error}
+        />
+      ) : null}
 
       {resolved ? (
         <ContextMenu

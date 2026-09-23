@@ -271,3 +271,55 @@ body {
   .chooser, .drop-row, .fields { grid-template-columns: 1fr; }
   .panels, .comparison-bar { grid-template-columns: 1fr; }
 }
+
+/* --- typing data --- */
+.switch.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.switch.inline input { margin: 0; }
+
+.typing-legend {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+  padding: 8px 14px;
+  max-height: 140px;
+  overflow: auto;
+}
+.legend-head { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+.legend-head label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.legend-head select {
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+}
+.legend-note { font-size: 12px; color: var(--muted); }
+.legend-note.error { color: var(--danger); }
+
+.legend-swatches {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.legend-swatches li { display: flex; align-items: center; gap: 5px; }
+.swatch {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  flex: 0 0 auto;
+  border: 1px solid rgb(0 0 0 / 12%);
+}

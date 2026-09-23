@@ -9,6 +9,8 @@
 
 import type {
   ApiErrorBody,
+  CompositionResponse,
+  IsolateKeys,
   ComparisonStatus,
   ComparisonSummary,
   DatasetsResponse,
@@ -94,6 +96,28 @@ export const api = {
       { signal: options.signal },
     );
   },
+
+  isolateKeys: (isolateSet: string) =>
+    request<IsolateKeys>(`/isolates/${encodeURIComponent(isolateSet)}/keys`),
+
+  /**
+   * Typing-data composition for the leaves currently on screen.
+   *
+   * POST rather than GET because the leaf list is the request: a slice can
+   * name hundreds of sequence types, which is past what belongs in a URL.
+   */
+  compositions: (
+    isolateSet: string,
+    body: { leaves: string[]; segment_by: string; filter?: Record<string, string[]> },
+  ) =>
+    request<CompositionResponse>(
+      `/isolates/${encodeURIComponent(isolateSet)}/compositions`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filter: {}, ...body }),
+      },
+    ),
 
   upload: (form: FormData) =>
     request<UploadAccepted>("/comparisons", { method: "POST", body: form }),

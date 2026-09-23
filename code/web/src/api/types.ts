@@ -122,3 +122,44 @@ export interface ApiErrorBody {
   code: string;
   hint: string | null;
 }
+
+
+export interface FacetSummary {
+  name: string;
+  n_distinct: number;
+  n_missing: number;
+  segmentable: boolean;
+}
+
+export interface IsolateKeys {
+  species: string;
+  n_isolates: number;
+  n_sequence_types: number;
+  source: string;
+  facets: FacetSummary[];
+}
+
+export interface ValueCount {
+  value: string;
+  count: number;
+}
+
+export interface LeafComposition {
+  leaf: string;
+  /** Isolates for this leaf that passed every filter. */
+  total: number;
+  /**
+   * Isolates before filtering. `available === 0` means the leaf has no typing
+   * data at all — true of 3.9% of vibrio leaves — which is different from
+   * "filtered down to nothing", and a client should not draw them the same.
+   */
+  available: number;
+  segments: ValueCount[];
+}
+
+export interface CompositionResponse {
+  species: string;
+  segment_by: string;
+  filter: Record<string, string[]>;
+  leaves: LeafComposition[];
+}

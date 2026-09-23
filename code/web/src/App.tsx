@@ -10,11 +10,18 @@ import { api, ApiError } from "./api/client";
 import { ComparisonView } from "./comparison/ComparisonView";
 import { UploadPanel } from "./upload/UploadPanel";
 import { useUrlState } from "./useUrlState";
-import type { ComparisonSummary, PairSummary, WhoAmI } from "./api/types";
+import type {
+  ComparisonSummary,
+  DatasetsResponse,
+  PairSummary,
+  WhoAmI,
+} from "./api/types";
 
 export function App() {
   const [me, setMe] = useState<WhoAmI | null>(null);
   const [pairs, setPairs] = useState<PairSummary[]>([]);
+  const [datasets, setDatasets] = useState<DatasetsResponse | null>(null);
+  const [showTyping, setShowTyping] = useState(false);
   const [view, setView] = useUrlState();
   const [chosen, setChosen] = useState<PairSummary | null>(null);
   const [summary, setSummary] = useState<ComparisonSummary | null>(null);
@@ -24,6 +31,7 @@ export function App() {
     try {
       const [who, datasets] = await Promise.all([api.me(), api.datasets()]);
       setMe(who);
+      setDatasets(datasets);
       setPairs(datasets.pairs);
       setError(null);
     } catch (failed) {
@@ -75,6 +83,16 @@ export function App() {
           <span className="chip">{me.display_name || me.owner_id}</span>
         ) : null}
         {chosen ? (
+          <label className="switch inline" title="Show isolate composition per leaf">
+            <input
+              type="checkbox"
+              checked={showTyping}
+              onChange={(event) => setShowTyping(event.target.checked)}
+            />
+            Typing data
+          </label>
+        ) : null}
+        {chosen ? (
           <button
             type="button"
             className="link-button"
@@ -102,6 +120,8 @@ export function App() {
                 : undefined
             }
             onNavigate={(l, r) => setView({ comparison: chosen.id, left: l, right: r })}
+            isolateSets={isolateSetsFor(chosen, datasets)}
+            showTyping={showTyping}
           />
         </>
       ) : (
@@ -156,4 +176,29 @@ export function App() {
       )}
     </div>
   );
+}
+
+
+/**
+ * Which isolate store holds each side's typing data.
+ *
+ * A tree's store is keyed by its species for catalogue data and by its dataset
+ * id for an upload (§24.5), so the answer comes from the listing rather than
+ * being assembled here. Null where a tree has none, which is the common case
+ * before anyone uploads a table.
+ */
+function isolateSetsFor(
+  pair: PairSummary,
+  datasets: DatasetsResponse | null,
+): [string | null, string | null] {
+  if (!datasets) return [null, null];
+  const have = new Set(datasets.isolates.map((isolate) => isolate.species));
+  const forTree = (treeId: string): string | null => {
+    const tree = datasets.trees.find((candidate) => candidate.id === treeId);
+    for (const candidate of [treeId, tree?.species]) {
+      if (candidate && have.has(candidate)) return candidate;
+    }
+    return null;
+  };
+  return [forTree(pair.left), forTree(pair.right)];
 }
