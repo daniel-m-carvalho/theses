@@ -83,11 +83,19 @@ describe("a real slice from the backend", () => {
     expect(at).toBe(slice.nodes.id.indexOf(slice.root));
   });
 
-  it("gives unlabelled internal nodes distinct names", () => {
-    // Sigma keys nodes by name; duplicates would silently merge them.
+  it("blanks the placeholder label the source Newick uses for unnamed nodes", () => {
+    // 97 of 119 nodes in this slice are labelled "_". Left alone the layout
+    // captions every internal node `_`; an earlier fix captioned them
+    // `node-10251`, which is worse — a made-up id shown as if it meant
+    // something. Identity lives in metadata, not in the name.
     const built = treeFromSlice(slice);
-    const names = collect(built.root).map((n) => (n as { name: string }).name);
-    expect(new Set(names).size).toBe(names.length);
+    const nodes = collect(built.root) as { name: string; metadata?: Record<string, unknown> }[];
+    expect(nodes.some((n) => n.name === "")).toBe(true);
+    expect(nodes.every((n) => n.name !== "_")).toBe(true);
+    // Real leaf labels survive untouched.
+    expect(nodes.some((n) => /^\d+$/.test(n.name))).toBe(true);
+    // And every node still knows its backend id.
+    expect(nodes.every((n) => typeof n.metadata?.storedId === "number")).toBe(true);
   });
 });
 

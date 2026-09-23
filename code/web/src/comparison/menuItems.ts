@@ -22,21 +22,27 @@ import { DEFAULT_BUDGET, EXPAND_ALL_LIMIT, type SideActions, type SideState } fr
 export interface PendingMenu {
   side: 0 | 1;
   at: MenuPosition;
-  /** The Sigma key of the node clicked, or undefined for empty stage. */
-  node?: string;
+  /**
+   * The backend's id for the node, or undefined when the menu was opened away
+   * from one.
+   *
+   * Resolved before it gets here, through the library's own node map. An
+   * earlier version passed the Sigma key and looked it up by name, which was
+   * wrong twice: the library prefixes keys (`named_10049`) and generates its
+   * own (`n47`) for anything unnamed, so the lookup missed and every node
+   * menu said "this node has no server id".
+   */
+  storedId?: number;
 }
 
 export function menuTitle(menu: PendingMenu, states: [SideState, SideState]): string {
   const state = states[menu.side];
-  if (!menu.node) return `${state.treeId} — view`;
-  const tree = state.tree;
-  const storedId = tree?.storedIdOfName.get(menu.node);
-  const node = storedId === undefined ? undefined : tree?.byStoredId.get(storedId);
-  const leaves = node ? tree?.trueLeafCountOf(node) : undefined;
-  const label = (node?.metadata?.label as string) || menu.node;
-  return leaves && leaves > 1
-    ? `${label} — ${leaves.toLocaleString()} leaves`
-    : String(label);
+  if (menu.storedId === undefined) return `${state.treeId} — view`;
+  const node = state.tree?.byStoredId.get(menu.storedId);
+  const leaves = node ? state.tree?.trueLeafCountOf(node) : undefined;
+  const label = (node?.metadata?.label as string) || "";
+  const named = label && label !== "_" ? label : "unnamed clade";
+  return leaves && leaves > 1 ? `${named} — ${leaves.toLocaleString()} leaves` : named;
 }
 
 export function buildMenu(
@@ -51,35 +57,32 @@ export function buildMenu(
   const actThere = actions[otherSide];
   const items: MenuItem[] = [];
 
-  if (menu.node && here.tree) {
-    const storedId = here.tree.storedIdOfName.get(menu.node);
-    const node = storedId === undefined ? undefined : here.tree.byStoredId.get(storedId);
+  if (menu.storedId !== undefined && here.tree) {
+    const storedId = menu.storedId;
+    const node = here.tree.byStoredId.get(storedId);
     const leaves = node ? (here.tree.trueLeafCountOf(node) ?? 0) : 0;
-    const isWedge = storedId !== undefined && here.tree.truncated.has(storedId);
+    const isWedge = here.tree.truncated.has(storedId);
     const alreadyHere = here.path[here.path.length - 1] === storedId;
 
     items.push({
       label: isWedge ? "Expand this clade" : "Focus this subtree",
       detail: leaves > 1 ? `${leaves.toLocaleString()} leaves — fetches a new slice` : undefined,
       disabledBecause:
-        storedId === undefined
-          ? "this node has no server id"
+        !node
+          ? "this node is not in the current slice"
           : leaves <= 1
             ? "a single leaf has nothing to expand"
             : alreadyHere
               ? "already showing this subtree"
               : undefined,
       onSelect:
-        storedId === undefined || leaves <= 1 || alreadyHere
-          ? undefined
-          : () => act.focus(storedId),
+        !node || leaves <= 1 || alreadyHere ? undefined : () => act.focus(storedId),
     });
 
     // The correspondence is what a comparison is for: the same clade, located
     // in the other tree. Computed once per pair on the server, so this is a
     // lookup rather than a search.
-    const partner =
-      storedId === undefined ? undefined : here.gradient.correspondingTo(storedId);
+    const partner = here.gradient.correspondingTo(storedId);
     items.push({
       label: "Show the matching clade on the other side",
       detail: partner !== undefined ? `node ${partner} in ${there.treeId}` : undefined,

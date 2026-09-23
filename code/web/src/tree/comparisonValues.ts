@@ -11,8 +11,8 @@ import type { ComparisonValues } from "../api/types";
 import type { SliceTree } from "./fromSlice";
 
 export interface Gradient {
-  /** Similarity in [0, 1] for a node key, or undefined where it has none. */
-  valueFor: (key: string) => number | undefined;
+  /** Similarity in [0, 1] for a stored id, or undefined where it has none. */
+  similarityOf: (storedId: number) => number | undefined;
   /** The corresponding node in the other tree, by stored id. */
   correspondingTo: (storedId: number) => number | undefined;
 }
@@ -22,17 +22,18 @@ export function gradientFrom(
   values: ComparisonValues | null | undefined,
 ): Gradient {
   if (!values) {
-    return { valueFor: () => undefined, correspondingTo: () => undefined };
+    return { similarityOf: () => undefined, correspondingTo: () => undefined };
   }
 
-  const byKey = new Map<string, number>();
-  for (const [name, storedId] of tree.storedIdOfName) {
-    const at = tree.indexOfStoredId.get(storedId);
-    if (at === undefined) continue;
-    const similarity = values.similarity[at];
+  // Keyed by stored id, never by name. The library generates its own Sigma
+  // keys and a node's name is neither unique nor stable, so the backend's
+  // pre-order index is the only identifier both sides agree on.
+  const similarity = new Map<number, number>();
+  for (const [storedId, at] of tree.indexOfStoredId) {
+    const value = values.similarity[at];
     // null is "this node has no counterpart" — JSON has no NaN, so the API
     // sends null rather than a sentinel that would look like a real value.
-    if (similarity !== null && similarity !== undefined) byKey.set(name, similarity);
+    if (value !== null && value !== undefined) similarity.set(storedId, value);
   }
 
   const corresponds = new Map<number, number>();
@@ -42,7 +43,7 @@ export function gradientFrom(
   }
 
   return {
-    valueFor: (key) => byKey.get(key),
+    similarityOf: (storedId) => similarity.get(storedId),
     correspondingTo: (storedId) => corresponds.get(storedId),
   };
 }

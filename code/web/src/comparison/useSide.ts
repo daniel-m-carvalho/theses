@@ -55,7 +55,7 @@ export interface SideActions {
 }
 
 const NO_GRADIENT: Gradient = {
-  valueFor: () => undefined,
+  similarityOf: () => undefined,
   correspondingTo: () => undefined,
 };
 

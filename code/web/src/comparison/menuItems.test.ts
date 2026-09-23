@@ -46,12 +46,10 @@ function actions(): SideActions & { calls: string[] } {
 }
 
 /** A wedge from the real slice — a tip standing for a clade nobody expanded. */
-function aWedge(state: SideState): string {
+function aWedge(state: SideState): number {
   const id = [...state.tree!.truncated][0];
-  for (const [name, storedId] of state.tree!.storedIdOfName) {
-    if (storedId === id) return name;
-  }
-  throw new Error("no wedge in the fixture");
+  if (id === undefined) throw new Error("no wedge in the fixture");
+  return id;
 }
 
 const at = { x: 10, y: 10 };
@@ -61,7 +59,7 @@ const by = (items: ReturnType<typeof buildMenu>, label: string) =>
 describe("right-clicking a node", () => {
   it("offers to expand a wedge, naming how much is behind it", () => {
     const left = sideOf();
-    const menu: PendingMenu = { side: 0, at, node: aWedge(left) };
+    const menu: PendingMenu = { side: 0, at, storedId: aWedge(left) };
     const items = buildMenu(menu, [left, sideOf()], [actions(), actions()]);
 
     const expand = by(items, "Expand this clade");
@@ -73,10 +71,9 @@ describe("right-clicking a node", () => {
   it("fetches a slice rooted at the node that was clicked", () => {
     const left = sideOf();
     const act = actions();
-    const node = aWedge(left);
-    const storedId = left.tree!.storedIdOfName.get(node)!;
+    const storedId = aWedge(left);
 
-    const items = buildMenu({ side: 0, at, node }, [left, sideOf()], [act, actions()]);
+    const items = buildMenu({ side: 0, at, storedId }, [left, sideOf()], [act, actions()]);
     by(items, "Expand this clade").onSelect!();
 
     expect(act.calls).toEqual([`focus:${storedId}`]);
@@ -84,11 +81,10 @@ describe("right-clicking a node", () => {
 
   it("will not re-enter the subtree already being shown", () => {
     const left = sideOf();
-    const node = aWedge(left);
-    const storedId = left.tree!.storedIdOfName.get(node)!;
+    const storedId = aWedge(left);
     const already = sideOf({ path: [storedId], canGoBack: true });
 
-    const items = buildMenu({ side: 0, at, node }, [already, sideOf()], [actions(), actions()]);
+    const items = buildMenu({ side: 0, at, storedId }, [already, sideOf()], [actions(), actions()]);
     expect(by(items, "Expand this clade").disabledBecause).toMatch(/already showing/);
     expect(by(items, "Expand this clade").onSelect).toBeUndefined();
   });
@@ -101,14 +97,13 @@ describe("right-clicking a node", () => {
     const leftAct = actions();
     const rightAct = actions();
 
-    const withPartner = [...left.tree!.storedIdOfName].find(
-      ([, id]) => left.gradient.correspondingTo(id) !== undefined,
+    const storedId = [...left.tree!.indexOfStoredId.keys()].find(
+      (id) => left.gradient.correspondingTo(id) !== undefined,
     );
-    expect(withPartner).toBeDefined();
-    const [node, storedId] = withPartner!;
-    const partner = left.gradient.correspondingTo(storedId)!;
+    expect(storedId).toBeDefined();
+    const partner = left.gradient.correspondingTo(storedId!)!;
 
-    const items = buildMenu({ side: 0, at, node }, [left, right], [leftAct, rightAct]);
+    const items = buildMenu({ side: 0, at, storedId }, [left, right], [leftAct, rightAct]);
     const jump = by(items, "Show the matching clade on the other side");
     expect(jump.disabledBecause).toBeUndefined();
     expect(jump.detail).toContain("vibrio-upgma");
@@ -120,10 +115,10 @@ describe("right-clicking a node", () => {
 
   it("says so when a clade has no counterpart, rather than hiding the option", () => {
     const left = sideOf({
-      gradient: { valueFor: () => undefined, correspondingTo: () => undefined },
+      gradient: { similarityOf: () => undefined, correspondingTo: () => undefined },
     });
     const items = buildMenu(
-      { side: 0, at, node: aWedge(left) },
+      { side: 0, at, storedId: aWedge(left) },
       [left, sideOf()],
       [actions(), actions()],
     );
@@ -134,7 +129,7 @@ describe("right-clicking a node", () => {
 
   it("titles the menu with the clade and its size", () => {
     const left = sideOf();
-    expect(menuTitle({ side: 0, at, node: aWedge(left) }, [left, sideOf()])).toMatch(
+    expect(menuTitle({ side: 0, at, storedId: aWedge(left) }, [left, sideOf()])).toMatch(
       /\d[\d,]* leaves/,
     );
   });

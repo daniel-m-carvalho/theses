@@ -20,7 +20,7 @@ import {
 } from "phylo-tree-viewer";
 import type { PairSummary } from "../api/types";
 import { ContextMenu } from "../menu/ContextMenu";
-import { buildMenu, type PendingMenu } from "./menuItems";
+import { buildMenu, menuTitle, type PendingMenu } from "./menuItems";
 import { useSide, type SideActions, type SideState } from "./useSide";
 
 /**
@@ -93,7 +93,21 @@ export function ComparisonView({
   // What is selected in each panel. The menu acts on this when opened away
   // from a node, which is the interaction the library's selection operator is
   // there for: pick a node, then ask what can be done with it.
-  const [selected, setSelected] = useState<[string | null, string | null]>([null, null]);
+  const [selected, setSelected] = useState<[number | null, number | null]>([null, null]);
+  /**
+   * Sigma key → the backend's stored id, per panel.
+   *
+   * Built from the library's own node map on every render, because the key is
+   * the library's to choose: it prefixes names (`named_10049`) and generates
+   * `n47` for anything unnamed. Reconstructing that format here would be a
+   * guess that silently stops matching the day it changes; the node map is the
+   * library telling us directly, and `source.metadata` carries the id through
+   * `prepareTree`'s cloning.
+   */
+  const keyToStoredId = useRef<[Map<string, number>, Map<string, number>]>([
+    new Map(),
+    new Map(),
+  ]);
 
   // Read by the library's providers on every lookup, so they always see the
   // slice currently displayed rather than the one present at construction.
@@ -110,19 +124,24 @@ export function ComparisonView({
     const built = createComparison([leftHost.current, rightHost.current], CONFIG, {
       trees: [sides.current[0].tree!.root, sides.current[1].tree!.root],
       onSelectionChange: (keys: string[], panelIndex: number) => {
+        const key = keys[keys.length - 1];
+        const storedId =
+          key === undefined ? null : (keyToStoredId.current[panelIndex].get(key) ?? null);
         setSelected((current) => {
-          const next: [string | null, string | null] = [...current];
-          next[panelIndex] = keys[keys.length - 1] ?? null;
+          const next: [number | null, number | null] = [...current];
+          next[panelIndex] = storedId;
           return next;
         });
       },
-      valueFor: (key: string) => {
-        // The library asks by node key without saying which panel; a key is
-        // unique within a slice but the same clade appears in both, so both
-        // are consulted. They agree where they overlap — the similarity of a
-        // clade is a property of the pair, not of a side.
+      // The provider is handed the node as well as the key; the node carries
+      // the backend's id, which is the only identifier both sides agree on.
+      // Keying by name would break on the unnamed internal nodes that make up
+      // most of a slice.
+      valueFor: (_key: string, node) => {
+        const storedId = node.metadata?.storedId;
+        if (typeof storedId !== "number") return undefined;
         const [l, r] = sides.current;
-        return l.gradient.valueFor(key) ?? r.gradient.valueFor(key);
+        return l.gradient.similarityOf(storedId) ?? r.gradient.similarityOf(storedId);
       },
     });
     handle.current = built;
@@ -130,11 +149,20 @@ export function ComparisonView({
     const unsubscribe = built.panels.map((panel, index) => {
       const side = index as 0 | 1;
       const off = [
+        // Rebuilt on every render: pruning and re-layout mint new keys.
+        panel.viewer.events.on("render", ({ nodeMap }) => {
+          const resolved = new Map<string, number>();
+          for (const [key, layoutNode] of nodeMap) {
+            const storedId = layoutNode.source.metadata?.storedId;
+            if (typeof storedId === "number") resolved.set(key, storedId);
+          }
+          keyToStoredId.current[side] = resolved;
+        }),
         panel.viewer.events.on("rightClickNode", ({ node, x, y, original }) => {
           // The emit is synchronous inside the DOM dispatch, so this still
           // suppresses the browser's own menu.
           original.preventDefault?.();
-          setMenu({ side, at: { x, y }, node });
+          setMenu({ side, at: { x, y }, storedId: keyToStoredId.current[side].get(node) });
         }),
         panel.viewer.events.on("rightClickStage", ({ x, y, original }) => {
           original.preventDefault?.();
@@ -171,7 +199,7 @@ export function ComparisonView({
   // one — selecting and then right-clicking is the flow the menus were asked
   // for, and it is also the only way to reach a node too small to hit.
   const resolved: PendingMenu | null = menu
-    ? { ...menu, node: menu.node ?? selected[menu.side] ?? undefined }
+    ? { ...menu, storedId: menu.storedId ?? selected[menu.side] ?? undefined }
     : null;
 
   const items = resolved
@@ -227,14 +255,16 @@ function Side({
   label: string;
   state: SideState;
   actions: SideActions;
-  selected: string | null;
+  selected: number | null;
 }) {
   const slice = state.slice;
   return (
     <div className="side-summary">
       <p className="side-name">
         {label}: <strong>{state.treeId}</strong>
-        {selected ? <span className="selected-node"> · selected {selected}</span> : null}
+        {selected !== null ? (
+          <span className="selected-node"> · node {selected} selected</span>
+        ) : null}
       </p>
       {slice ? (
         <p className="side-counts">
@@ -254,17 +284,4 @@ function Side({
       ) : null}
     </div>
   );
-}
-
-function menuTitle(menu: PendingMenu, states: [SideState, SideState]): string {
-  const state = states[menu.side];
-  if (!menu.node) return `${state.treeId} — view`;
-  const tree = state.tree;
-  const storedId = tree?.storedIdOfName.get(menu.node);
-  const node = storedId === undefined ? undefined : tree?.byStoredId.get(storedId);
-  const leaves = node ? tree?.trueLeafCountOf(node) : undefined;
-  const label = (node?.metadata?.label as string) || menu.node;
-  return leaves && leaves > 1
-    ? `${label} — ${leaves.toLocaleString()} leaves`
-    : String(label);
 }

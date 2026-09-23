@@ -26,13 +26,6 @@ export interface SliceTree {
   byStoredId: Map<number, NewickNode>;
   /** Index into the slice arrays, by stored id — for comparison lookups. */
   indexOfStoredId: Map<number, number>;
-  /**
-   * Stored id by Sigma node key (the node's `name`).
-   *
-   * The library's comparison operator asks for a value by key, not by node, so
-   * the gradient needs this direction too.
-   */
-  storedIdOfName: Map<string, number>;
   truncated: Set<number>;
 }
 
@@ -48,8 +41,13 @@ export interface SliceTree {
  *
  * `"_"` is not a backend invention — it is what the source Newick writes for
  * an unnamed internal node, and in the vibrio tree 97 of 119 sliced nodes
- * carry it. Treating it as a name would give almost every node the same Sigma
- * key, and Sigma keys nodes by name: they would silently merge into one.
+ * carry it. It is blanked rather than kept, because the layout draws a node's
+ * name as its label: left alone, every internal node on screen was captioned
+ * `_`, and an earlier attempt to make them unique captioned them `node-10251`,
+ * which is worse — a made-up identifier presented as if it meant something.
+ *
+ * Identity does not travel in the name. It travels in `metadata.storedId`,
+ * which is the only thing that survives the library's own key generation.
  */
 const UNLABELLED = new Set(["", "_"]);
 
@@ -63,22 +61,11 @@ export function treeFromSlice(slice: TreeSlice): SliceTree {
   const byStoredId = new Map<number, NewickNode>();
   const indexOfStoredId = new Map<number, number>();
   const truncatedIds = new Set<number>();
-  const storedIdOfName = new Map<string, number>();
 
-  const taken = new Set<string>();
   const nodes: NewickNode[] = new Array(count);
   for (let k = 0; k < count; k += 1) {
-    // Sigma keys nodes by name, so a repeated name merges two nodes without
-    // complaining. An unlabelled node gets one built from its stored id, which
-    // is unique by construction; a real label that somehow repeats is
-    // disambiguated rather than trusted. Silently losing a node is the one
-    // outcome worth this much care.
-    let name = UNLABELLED.has(label[k]) ? `node-${id[k]}` : label[k];
-    if (taken.has(name)) name = `${name}-${id[k]}`;
-    taken.add(name);
-
     const node: NewickNode = {
-      name,
+      name: UNLABELLED.has(label[k]) ? "" : label[k],
       // What this node stands for in the FULL tree. The library sizes a wedge
       // and labels its tooltip from this; nothing local could work it out,
       // because a summarised clade arrives with no children to count.
@@ -87,8 +74,7 @@ export function treeFromSlice(slice: TreeSlice): SliceTree {
         storedId: id[k],
         trueLeafCount: true_leaf_count[k],
         truncated: truncated[k] ? 1 : 0,
-        // The label as sent, so display can show it even where `name` had to
-        // be synthesised for uniqueness.
+        // The label exactly as sent, for the menu title.
         label: label[k],
       },
     };
@@ -102,7 +88,6 @@ export function treeFromSlice(slice: TreeSlice): SliceTree {
     }
 
     nodes[k] = node;
-    storedIdOfName.set(name, id[k]);
     storedId.set(node, id[k]);
     trueLeaves.set(node, true_leaf_count[k]);
     byStoredId.set(id[k], node);
@@ -135,7 +120,6 @@ export function treeFromSlice(slice: TreeSlice): SliceTree {
     trueLeafCountOf: (node) => trueLeaves.get(resolve(node)) ?? trueLeaves.get(node),
     byStoredId,
     indexOfStoredId,
-    storedIdOfName,
     truncated: truncatedIds,
   };
 }
