@@ -227,12 +227,31 @@ export class TreeViewer {
   }
 
   /**
+   * Whether the container can currently be drawn into.
+   *
+   * Sigma throws from `resize()` when the container has no width, and a
+   * refresh resizes. That is exactly the state during teardown: operators
+   * detach and ask for one last refresh *after* the container has been taken
+   * out of the document, so the throw escaped a React effect cleanup and took
+   * the whole tree down — the app went blank instead of returning to the
+   * chooser.
+   *
+   * Keyed on being detached rather than on measuring zero. A detached
+   * container is unambiguously not worth drawing into, whereas a zero
+   * measurement is also what every element reports under jsdom, where the
+   * tests do very much expect rendering to happen.
+   */
+  private canRender(): boolean {
+    return this.container.isConnected;
+  }
+
+  /**
    * Re-measure after a container resize. The right-side reserve pan is in
    * *pixels*, so its camera offset depends on the viewport scale and has to be
    * recomputed — hence re-arming `pendingRecenter` rather than only resizing.
    */
   private onContainerResize(): void {
-    if (!this.renderer) return;
+    if (!this.renderer || !this.canRender()) return;
     this.renderer.resize();
     if (this.rightReservePx > 0) this.pendingRecenter = true;
     this.renderer.refresh();
@@ -422,7 +441,9 @@ export class TreeViewer {
       // filtered-out leaf (a selection highlight shouldn't un-dim it).
       return this.leafFilter ? this.dimIfFiltered(node, styled) : styled;
     });
-    this.renderer.refresh();
+    // The setting is kept whatever happens; only the draw is skipped, so the
+    // next real render picks it up.
+    if (this.canRender()) this.renderer.refresh();
   }
 
   /** Fade a leaf that fails the active filter; leave everything else as-is. */
@@ -439,7 +460,7 @@ export class TreeViewer {
     this.renderer.setSetting("edgeReducer", (edge: string, data: Record<string, unknown>) =>
       this.edgeReducers.reduce((acc, reducer) => reducer(edge, acc), data)
     );
-    this.renderer.refresh();
+    if (this.canRender()) this.renderer.refresh();
   }
 
   // --- Rendering ---

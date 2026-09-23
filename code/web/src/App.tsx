@@ -95,13 +95,13 @@ export function App() {
         {chosen ? (
           <button
             type="button"
-            className="link-button"
+            className="back-button"
             onClick={() => {
               setChosen(null);
               setView({ comparison: null, left: [], right: [] });
             }}
           >
-            Choose another
+            <span aria-hidden="true">←</span> Back
           </button>
         ) : null}
       </header>

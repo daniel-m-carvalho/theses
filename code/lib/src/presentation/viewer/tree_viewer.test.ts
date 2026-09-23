@@ -303,6 +303,32 @@ describe("container resize", () => {
     expect(resize).toHaveBeenCalled();
   });
 
+  it("stops drawing once its container leaves the document", () => {
+    /**
+     * The teardown order that broke the app: React removes the container, then
+     * runs effect cleanups, and an operator detaching asks for one last
+     * refresh. Sigma resizes on refresh and throws when the container has no
+     * width, so the exception escaped a cleanup and unmounted everything —
+     * clicking "choose another comparison" left a blank page rather than the
+     * chooser.
+     */
+    const v = viewer();
+    v.setTree({ name: "root", branchset: [leaf("a"), leaf("b")] });
+    const container = v.getContainer();
+    const renderer = v.getRenderer() as unknown as { refresh: () => void };
+    const refresh = vi.spyOn(renderer, "refresh");
+
+    container.remove();
+    refresh.mockClear();
+
+    // Everything an operator does on its way out must be survivable.
+    expect(() => v.applyReducers()).not.toThrow();
+    expect(() => v.applyEdgeReducers()).not.toThrow();
+    expect(() => observers()[observers().length - 1].trigger()).not.toThrow();
+    expect(() => v.destroy()).not.toThrow();
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
   it("does not reset the camera, so a resize keeps the user's pan/zoom", () => {
     const v = viewer();
     v.setTree({ name: "root", branchset: [leaf("a"), leaf("b")] });

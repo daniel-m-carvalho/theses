@@ -256,6 +256,30 @@ body {
 .upload-status.failed { color: var(--danger); }
 .upload-status.ready { color: var(--accent); }
 
+/*
+ * Leaving a comparison is a navigation, so it looks like a button rather than
+ * a link — it was a small blue "Choose another" that read as incidental text,
+ * next to the panel's own "Back to whole tree" link, which does something
+ * quite different.
+ */
+.back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.back-button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .link-button {
   border: 0;
   background: none;

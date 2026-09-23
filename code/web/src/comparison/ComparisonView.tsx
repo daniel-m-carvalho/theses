@@ -64,15 +64,6 @@ const VIEWER = {
  * black bar. Deriving the two from each other keeps them in step if either is
  * retuned.
  */
-/**
- * Hit radius for a collapsed clade, in graph units.
- *
- * Chosen against the wedge: the triangle is `length` (14) pixels wide, and the
- * marker has to be at least that to be aimed at. Larger would start swallowing
- * clicks meant for the neighbouring row.
- */
-const CLADE_HIT_SIZE = 14;
-
 const CLADE_SHAPE = {
   enabled: true,
   // Black, as in the library's own demo: the wedge is structure, and colouring
@@ -283,23 +274,6 @@ export function ComparisonView({
 
     const unsubscribe = built.panels.map((panel, index) => {
       const side = index as 0 | 1;
-      /**
-       * Make the whole wedge clickable.
-       *
-       * The layout gives a collapsed clade a marker of 8 graph units, which at
-       * the zoom a whole tree fits into is a few screen pixels — far smaller
-       * than the 14px triangle drawn over it. Aiming at the triangle therefore
-       * missed: the click fell on empty stage, and "select a clade, then
-       * right-click to expand it" only worked once you had zoomed in.
-       *
-       * The marker is already transparent (the clade presenter hands its job
-       * to the wedge), so enlarging it is invisible — it only widens the
-       * target to match what the eye is aiming at.
-       */
-      const restoreSize = panel.viewer.addNodeReducer((_node, data) =>
-        data.collapsed ? { ...data, size: CLADE_HIT_SIZE } : data,
-      );
-
       // Once now, because the first render already happened inside
       // createComparison, and again on every later one: pruning and re-layout
       // mint new keys.
@@ -328,10 +302,7 @@ export function ComparisonView({
           });
         }),
       ];
-      return () => {
-        restoreSize();
-        off.forEach((fn) => fn());
-      };
+      return () => off.forEach((fn) => fn());
     });
 
     return () => {
