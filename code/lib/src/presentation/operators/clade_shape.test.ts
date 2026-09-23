@@ -118,3 +118,29 @@ describe("CladeShapePresenter", () => {
     expect(wedges(h.container)).toHaveLength(0);
   });
 });
+
+describe("sizing wedges in a server-summarised view", () => {
+  /**
+   * The failure this guards: a view holding 50 leaves that stands for 17,645.
+   * Calibrating to the 50 makes every wedge hiding more than that saturate,
+   * so a clade of twelve and a clade of eight thousand draw identically —
+   * which defeats the only thing a wedge has to say.
+   */
+  it("distinguishes a small hidden clade from a huge one", () => {
+    const presenter = new CladeShapePresenter({});
+    const at = (leaves: number, standsFor: number): number =>
+      // @ts-expect-error probing the private scale deliberately: it is the
+      // behaviour under test, and exposing it would widen the public API for
+      // a test's convenience.
+      presenter.heightFor(leaves, standsFor);
+
+    // Calibrated to what the view stands for, every size is distinguishable.
+    expect(at(8_441, 17_645)).toBeGreaterThan(at(400, 17_645));
+    expect(at(400, 17_645)).toBeGreaterThan(at(12, 17_645));
+
+    // Calibrated to the 50 leaves locally present, everything at or above 50
+    // pins to the top of the scale: a clade of 400 and one of 8,441 draw
+    // identically, and the wedge stops carrying information.
+    expect(at(400, 50)).toBeCloseTo(at(8_441, 50), 5);
+  });
+});

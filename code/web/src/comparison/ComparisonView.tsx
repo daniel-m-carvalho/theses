@@ -21,7 +21,13 @@ import {
 import type { PairSummary } from "../api/types";
 import { ContextMenu } from "../menu/ContextMenu";
 import { buildMenu, menuTitle, type PendingMenu } from "./menuItems";
-import { readableBudget, useSide, type SideActions, type SideState } from "./useSide";
+import {
+  PIXELS_PER_LEAF,
+  readableBudget,
+  useSide,
+  type SideActions,
+  type SideState,
+} from "./useSide";
 
 /**
  * Panels are identical except for their label: the same budget, the same
@@ -47,19 +53,46 @@ const VIEWER = {
   maxNodes: 100_000,
 } as const;
 
+/**
+ * Wedge size, tied to the row spacing rather than left at the library default.
+ *
+ * The default tops out at a half-height of 13 — a 26px triangle. The budget
+ * puts a tip every `PIXELS_PER_LEAF` pixels, so at that size neighbouring
+ * clades overlapped by more than double and the column of them read as one
+ * black bar. Deriving the two from each other keeps them in step if either is
+ * retuned.
+ */
+const CLADE_SHAPE = {
+  enabled: true,
+  // Black, as in the library's own demo: the wedge is structure, and colouring
+  // it competes with the divergence gradient, which is the thing on screen
+  // that actually carries a value.
+  color: "#000000",
+  minHalfHeight: Math.max(1, PIXELS_PER_LEAF * 0.12),
+  maxHalfHeight: PIXELS_PER_LEAF * 0.42,
+} as const;
+
 const CONFIG: Config = {
   panels: [
     {
       id: "left",
       viewer: { ...VIEWER },
-      operators: { expandCollapse: false, selection: { enabled: true } },
+      operators: {
+        expandCollapse: false,
+        selection: { enabled: true },
+        cladeShape: { ...CLADE_SHAPE },
+      },
     },
     {
       id: "right",
       // Mirrored so the two trees face each other and corresponding clades sit
       // opposite rather than both running left to right.
       viewer: { ...VIEWER, reflect: true },
-      operators: { expandCollapse: false, selection: { enabled: true } },
+      operators: {
+        expandCollapse: false,
+        selection: { enabled: true },
+        cladeShape: { ...CLADE_SHAPE },
+      },
     },
   ],
   comparison: {
@@ -101,19 +134,49 @@ export function ComparisonView({
   // there for: pick a node, then ask what can be done with it.
   const [selected, setSelected] = useState<[number | null, number | null]>([null, null]);
   /**
+   * The last clade actually chosen, per panel — kept alive across the clear
+   * that opening a menu causes.
+   *
+   * Right-clicking empty canvas makes the selection operator drop the
+   * selection, and it does so before the menu is built. Reading the live
+   * selection therefore always found nothing, and "select a clade, then
+   * right-click to act on it" — the whole interaction — silently degraded to
+   * the view menu. This holds the choice until the user makes another one or
+   * explicitly clears it with a left click on empty canvas.
+   */
+  const lastSelected = useRef<[number | null, number | null]>([null, null]);
+  /**
    * Sigma key → the backend's stored id, per panel.
    *
-   * Built from the library's own node map on every render, because the key is
-   * the library's to choose: it prefixes names (`named_10049`) and generates
-   * `n47` for anything unnamed. Reconstructing that format here would be a
-   * guess that silently stops matching the day it changes; the node map is the
-   * library telling us directly, and `source.metadata` carries the id through
-   * `prepareTree`'s cloning.
+   * Built from the library's own node map, because the key is the library's to
+   * choose: it prefixes names (`named_10049`) and generates `n47` for anything
+   * unnamed. Reconstructing that format here would be a guess that silently
+   * stops matching the day it changes; the node map is the library telling us
+   * directly, and `source.metadata` carries the id through `prepareTree`'s
+   * cloning.
    */
   const keyToStoredId = useRef<[Map<string, number>, Map<string, number>]>([
     new Map(),
     new Map(),
   ]);
+
+  /**
+   * Re-read a panel's key mapping.
+   *
+   * Pulled from `getNodeMap()` rather than taken from the `render` event
+   * payload alone, because `createComparison` renders during construction —
+   * before there is anything to subscribe with. Listening only for the event
+   * left the map empty until the next re-render, so on first load selecting a
+   * clade resolved to nothing and the menu fell back to the view.
+   */
+  const refreshKeys = useCallback((side: 0 | 1, viewer: { getNodeMap: () => Map<string, { source: { metadata?: Record<string, unknown> } }> }) => {
+    const resolved = new Map<string, number>();
+    for (const [key, layoutNode] of viewer.getNodeMap()) {
+      const storedId = layoutNode.source.metadata?.storedId;
+      if (typeof storedId === "number") resolved.set(key, storedId);
+    }
+    keyToStoredId.current[side] = resolved;
+  }, []);
 
   // Read by the library's providers on every lookup, so they always see the
   // slice currently displayed rather than the one present at construction.
@@ -133,6 +196,7 @@ export function ComparisonView({
         const key = keys[keys.length - 1];
         const storedId =
           key === undefined ? null : (keyToStoredId.current[panelIndex].get(key) ?? null);
+        if (storedId !== null) lastSelected.current[panelIndex] = storedId;
         setSelected((current) => {
           const next: [number | null, number | null] = [...current];
           next[panelIndex] = storedId;
@@ -154,16 +218,12 @@ export function ComparisonView({
 
     const unsubscribe = built.panels.map((panel, index) => {
       const side = index as 0 | 1;
+      // Once now, because the first render already happened inside
+      // createComparison, and again on every later one: pruning and re-layout
+      // mint new keys.
+      refreshKeys(side, panel.viewer);
       const off = [
-        // Rebuilt on every render: pruning and re-layout mint new keys.
-        panel.viewer.events.on("render", ({ nodeMap }) => {
-          const resolved = new Map<string, number>();
-          for (const [key, layoutNode] of nodeMap) {
-            const storedId = layoutNode.source.metadata?.storedId;
-            if (typeof storedId === "number") resolved.set(key, storedId);
-          }
-          keyToStoredId.current[side] = resolved;
-        }),
+        panel.viewer.events.on("render", () => refreshKeys(side, panel.viewer)),
         panel.viewer.events.on("rightClickNode", ({ node, x, y, original }) => {
           // The emit is synchronous inside the DOM dispatch, so this still
           // suppresses the browser's own menu.
@@ -172,7 +232,16 @@ export function ComparisonView({
         }),
         panel.viewer.events.on("rightClickStage", ({ x, y, original }) => {
           original.preventDefault?.();
-          setMenu({ side, at: { x, y } });
+          setMenu({ side, at: { x, y }, storedId: lastSelected.current[side] ?? undefined });
+        }),
+        // A left click on empty canvas is the deliberate "never mind".
+        panel.viewer.events.on("clickStage", () => {
+          lastSelected.current[side] = null;
+          setSelected((current) => {
+            const next: [number | null, number | null] = [...current];
+            next[side] = null;
+            return next;
+          });
         }),
       ];
       return () => off.forEach((fn) => fn());
@@ -217,7 +286,11 @@ export function ComparisonView({
   // one — selecting and then right-clicking is the flow the menus were asked
   // for, and it is also the only way to reach a node too small to hit.
   const resolved: PendingMenu | null = menu
-    ? { ...menu, storedId: menu.storedId ?? selected[menu.side] ?? undefined }
+    ? {
+        ...menu,
+        storedId:
+          menu.storedId ?? selected[menu.side] ?? lastSelected.current[menu.side] ?? undefined,
+      }
     : null;
 
   const items = resolved

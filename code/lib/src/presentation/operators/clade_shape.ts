@@ -196,6 +196,13 @@ export class CladeShapePresenter implements TreeOperator {
    * not per frame. In subtree mode the view root changes on drill-in, so the
    * scale re-calibrates to the subtree: heights stay relative to what you are
    * looking at.
+   *
+   * Calibrates to what the tree **stands for**, not to what it locally holds.
+   * For a tree held whole those are the same. For one summarised by a server
+   * they are not: a view holding 50 leaves may represent 17,645, and every
+   * wedge hiding more than 50 would otherwise saturate — drawing a clade of
+   * twelve and a clade of eight thousand at exactly the same size, which is
+   * the one thing a wedge exists to distinguish.
    */
   private resolveSaturateAt(): number {
     if (this.saturateAt != null) return this.saturateAt;
@@ -204,7 +211,7 @@ export class CladeShapePresenter implements TreeOperator {
     if (!tree) return 512; // no tree yet; any value, nothing is drawn
     if (this.autoSaturate?.tree === tree) return this.autoSaturate.value;
 
-    const value = Math.max(2, countLeaves(tree));
+    const value = Math.max(2, hiddenLeaves(tree));
     this.autoSaturate = { tree, value };
     return value;
   }

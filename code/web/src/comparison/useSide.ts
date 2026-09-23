@@ -20,7 +20,13 @@ import { gradientFrom, type Gradient } from "../tree/comparisonValues";
 import { treeFromSlice, type SliceTree } from "../tree/fromSlice";
 
 /**
- * Roughly how many vertical pixels one displayed leaf needs to be legible.
+ * Roughly how many vertical pixels one displayed tip needs to be legible.
+ *
+ * A slice's tips are mostly **wedges**, not leaves — at this budget the vibrio
+ * pair shows 19 real leaves and 31 collapsed clades — so this is really the
+ * row spacing of the view, and the wedge height is derived from it
+ * (`ComparisonView`). Fourteen leaves room for a triangle that can be told
+ * apart from its neighbours and still aimed at with a mouse.
  *
  * Six is where the staircase of a ladder-shaped tree stays visible as
  * separate steps. Below about three, adjacent leaves merge: the terminals —
@@ -29,7 +35,7 @@ import { treeFromSlice, type SliceTree } from "../tree/fromSlice";
  * fixed budget of 400 produced in a 700px panel (1.7px per leaf), and it is
  * why the trees looked like a smear rather than a tree.
  */
-const PIXELS_PER_LEAF = 6;
+export const PIXELS_PER_LEAF = 14;
 
 /** Used before a panel has been measured, and as the floor for a tiny window. */
 export const DEFAULT_BUDGET = 120;
