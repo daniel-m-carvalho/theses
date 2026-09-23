@@ -42,21 +42,23 @@ export function ContextMenu({
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Dismiss on anything that is not a choice: a click elsewhere, Escape, a
-    // scroll, or another right-click (which opens a fresh menu).
+    // Only a LEFT press dismisses. A right-click elsewhere is opening a new
+    // menu, and dismissing on it was a bug: the viewer's handler runs first
+    // (it listens on the container, this listens on the document, and events
+    // bubble inward-out), so the new menu was set and then immediately torn
+    // down by this — every right-click after the first appeared to do nothing.
     const away = (event: MouseEvent) => {
+      if (event.button !== 0) return;
       if (!ref.current?.contains(event.target as Node)) onDismiss();
     };
     const key = (event: KeyboardEvent) => {
       if (event.key === "Escape") onDismiss();
     };
     document.addEventListener("mousedown", away);
-    document.addEventListener("contextmenu", away);
     document.addEventListener("keydown", key);
     window.addEventListener("resize", onDismiss);
     return () => {
       document.removeEventListener("mousedown", away);
-      document.removeEventListener("contextmenu", away);
       document.removeEventListener("keydown", key);
       window.removeEventListener("resize", onDismiss);
     };

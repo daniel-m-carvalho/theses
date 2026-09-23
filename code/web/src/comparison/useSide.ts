@@ -63,8 +63,12 @@ export function useSide(
   treeId: string,
   compare: string | undefined,
   metric = "rf",
+  initialPath: number[] = [],
 ): [SideState, SideActions] {
-  const [path, setPath] = useState<number[]>([]);
+  // Seeded once, from the URL. Not kept in sync afterwards: the URL follows
+  // navigation, not the other way round, or every expansion would round-trip
+  // through the address bar.
+  const [path, setPath] = useState<number[]>(initialPath);
   const [budget, setBudget] = useState(DEFAULT_BUDGET);
   const [slice, setSlice] = useState<TreeSlice | null>(null);
   const [tree, setTree] = useState<SliceTree | null>(null);

@@ -28,14 +28,38 @@ import { useSide, type SideActions, type SideState } from "./useSide";
  * gradient, the same shaping. Anything asymmetric would make the two sides
  * incomparable by eye, which is the entire task.
  */
+/**
+ * `maxNodes` is raised deliberately.
+ *
+ * The viewer carries its own budget (default 200) and prunes with
+ * `prepareTree`. Here the **server** already budgeted, and it did so with
+ * information the client does not have — which clades diverge — so a second,
+ * blinder pruning on top would throw most of that away. The server's slice is
+ * shown as it arrived.
+ *
+ * `expandCollapse` is off for the same reason: collapsing is the server's job
+ * in this app, and a client-side operator with its own collapse state would be
+ * a second opinion about what is collapsed.
+ */
+const VIEWER = {
+  layoutMode: "cladogram",
+  hideInternalNodes: true,
+  maxNodes: 100_000,
+} as const;
+
 const CONFIG: Config = {
   panels: [
-    { id: "left", viewer: { layoutMode: "cladogram", hideInternalNodes: true } },
+    {
+      id: "left",
+      viewer: { ...VIEWER },
+      operators: { expandCollapse: false, selection: { enabled: true } },
+    },
     {
       id: "right",
       // Mirrored so the two trees face each other and corresponding clades sit
       // opposite rather than both running left to right.
-      viewer: { layoutMode: "cladogram", hideInternalNodes: true, reflect: true },
+      viewer: { ...VIEWER, reflect: true },
+      operators: { expandCollapse: false, selection: { enabled: true } },
     },
   ],
   comparison: {
@@ -50,14 +74,26 @@ const CONFIG: Config = {
   link: true,
 };
 
-export function ComparisonView({ pair }: { pair: PairSummary }) {
-  const [left, leftActions] = useSide(pair.left, pair.id);
-  const [right, rightActions] = useSide(pair.right, pair.id);
+export function ComparisonView({
+  pair,
+  initial,
+  onNavigate,
+}: {
+  pair: PairSummary;
+  initial?: { left: number[]; right: number[] };
+  onNavigate?: (left: number[], right: number[]) => void;
+}) {
+  const [left, leftActions] = useSide(pair.left, pair.id, "rf", initial?.left);
+  const [right, rightActions] = useSide(pair.right, pair.id, "rf", initial?.right);
 
   const leftHost = useRef<HTMLDivElement>(null);
   const rightHost = useRef<HTMLDivElement>(null);
   const handle = useRef<ComparisonHandle | null>(null);
   const [menu, setMenu] = useState<PendingMenu | null>(null);
+  // What is selected in each panel. The menu acts on this when opened away
+  // from a node, which is the interaction the library's selection operator is
+  // there for: pick a node, then ask what can be done with it.
+  const [selected, setSelected] = useState<[string | null, string | null]>([null, null]);
 
   // Read by the library's providers on every lookup, so they always see the
   // slice currently displayed rather than the one present at construction.
@@ -73,6 +109,13 @@ export function ComparisonView({ pair }: { pair: PairSummary }) {
 
     const built = createComparison([leftHost.current, rightHost.current], CONFIG, {
       trees: [sides.current[0].tree!.root, sides.current[1].tree!.root],
+      onSelectionChange: (keys: string[], panelIndex: number) => {
+        setSelected((current) => {
+          const next: [string | null, string | null] = [...current];
+          next[panelIndex] = keys[keys.length - 1] ?? null;
+          return next;
+        });
+      },
       valueFor: (key: string) => {
         // The library asks by node key without saying which panel; a key is
         // unique within a slice but the same clade appears in both, so both
@@ -117,15 +160,29 @@ export function ComparisonView({ pair }: { pair: PairSummary }) {
     if (right.tree) handle.current?.panels[1]?.viewer.setTree(right.tree.root);
   }, [right.tree]);
 
+  // Report where we are, so the URL names it and a refresh comes back here.
+  useEffect(() => {
+    onNavigate?.(left.path, right.path);
+  }, [left.path, right.path, onNavigate]);
+
   const dismiss = useCallback(() => setMenu(null), []);
 
-  const items = menu ? buildMenu(menu, [left, right], [leftActions, rightActions]) : [];
+  // A menu opened on empty canvas still acts on the selected node, if there is
+  // one — selecting and then right-clicking is the flow the menus were asked
+  // for, and it is also the only way to reach a node too small to hit.
+  const resolved: PendingMenu | null = menu
+    ? { ...menu, node: menu.node ?? selected[menu.side] ?? undefined }
+    : null;
+
+  const items = resolved
+    ? buildMenu(resolved, [left, right], [leftActions, rightActions])
+    : [];
 
   return (
     <div className="comparison">
       <header className="comparison-bar">
-        <Side label="Left" state={left} actions={leftActions} pair={pair} />
-        <Side label="Right" state={right} actions={rightActions} pair={pair} />
+        <Side label="Left" state={left} actions={leftActions} selected={selected[0]} />
+        <Side label="Right" state={right} actions={rightActions} selected={selected[1]} />
       </header>
 
       <div className="panels">
@@ -133,10 +190,10 @@ export function ComparisonView({ pair }: { pair: PairSummary }) {
         <Panel host={rightHost} state={right} />
       </div>
 
-      {menu ? (
+      {resolved ? (
         <ContextMenu
-          at={menu.at}
-          title={menuTitle(menu, [left, right])}
+          at={resolved.at}
+          title={menuTitle(resolved, [left, right])}
           items={items}
           onDismiss={dismiss}
         />
@@ -165,19 +222,19 @@ function Side({
   label,
   state,
   actions,
-  pair,
+  selected,
 }: {
   label: string;
   state: SideState;
   actions: SideActions;
-  pair: PairSummary;
+  selected: string | null;
 }) {
   const slice = state.slice;
   return (
     <div className="side-summary">
       <p className="side-name">
         {label}: <strong>{state.treeId}</strong>
-        {state.treeId === pair.left || state.treeId === pair.right ? null : " (?)"}
+        {selected ? <span className="selected-node"> · selected {selected}</span> : null}
       </p>
       {slice ? (
         <p className="side-counts">

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { NewickNode } from "./types";
+import { NEVER_COLLAPSED } from "./types";
 import {
   countLeaves,
   maxDepth,
@@ -202,5 +203,60 @@ describe("rerootTree", () => {
     rerootTree(tree, "c");
     expect(tree.name).toBe("root");
     expect(countLeaves(tree)).toBe(3);
+  });
+});
+
+describe("a server-summarised subtree", () => {
+  /**
+   * A consumer fed by a server that summarises receives tips that are not
+   * leaves: they stand for clades nobody expanded. Nothing local can tell the
+   * difference by looking at the structure — the node simply has no children —
+   * so the distinction has to be carried on the node itself.
+   */
+  const wedge = (name: string, stands: number): NewickNode => ({
+    name,
+    collapsed: true,
+    trueLeafCount: stands,
+  });
+
+  it("treats an incoming collapsed node as a clade, not a leaf", () => {
+    const tree: NewickNode = {
+      name: "root",
+      branchset: [{ name: "A" }, wedge("big", 8_441)],
+    };
+    const prepared = prepareTree(tree, NEVER_COLLAPSED, 100)!;
+    const [leaf, clade] = prepared.branchset!;
+
+    // Without this, the clade draws as an ordinary tip and the fact that it
+    // hides 8,441 leaves is lost entirely.
+    expect(leaf.collapsed).toBe(false);
+    expect(clade.collapsed).toBe(true);
+  });
+
+  it("carries the true leaf count through, because nothing can recompute it", () => {
+    const tree: NewickNode = { name: "root", branchset: [{ name: "A" }, wedge("big", 8_441)] };
+    const prepared = prepareTree(tree, NEVER_COLLAPSED, 100)!;
+    expect(prepared.branchset![1].trueLeafCount).toBe(8_441);
+    // countLeaves still reports what is locally present: a wedge draws as one
+    // thing, so the *budget* must not be charged 8,441 for it.
+    expect(countLeaves(prepared)).toBe(2);
+  });
+
+  it("still lets the predicate collapse an ordinary clade", () => {
+    // The pre-existing path must be unaffected.
+    const tree: NewickNode = {
+      name: "root",
+      branchset: [{ name: "A" }, { name: "inner", branchset: [{ name: "B" }, { name: "C" }] }],
+    };
+    const prepared = prepareTree(tree, (n) => n.name === "inner", 100)!;
+    expect(prepared.branchset![1].collapsed).toBe(true);
+    expect(prepared.branchset![1].branchset).toBeUndefined();
+  });
+
+  it("keeps `origin` on a wedge, so a click can be traced back", () => {
+    const source = wedge("big", 12);
+    const tree: NewickNode = { name: "root", branchset: [{ name: "A" }, source] };
+    const prepared = prepareTree(tree, NEVER_COLLAPSED, 100)!;
+    expect(prepared.branchset![1].origin).toBe(source);
   });
 });

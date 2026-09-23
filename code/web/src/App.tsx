@@ -9,11 +9,13 @@ import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "./api/client";
 import { ComparisonView } from "./comparison/ComparisonView";
 import { UploadPanel } from "./upload/UploadPanel";
+import { useUrlState } from "./useUrlState";
 import type { ComparisonSummary, PairSummary, WhoAmI } from "./api/types";
 
 export function App() {
   const [me, setMe] = useState<WhoAmI | null>(null);
   const [pairs, setPairs] = useState<PairSummary[]>([]);
+  const [view, setView] = useUrlState();
   const [chosen, setChosen] = useState<PairSummary | null>(null);
   const [summary, setSummary] = useState<ComparisonSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -32,6 +34,16 @@ export function App() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // Restore from the URL once the listing arrives. A refresh on a comparison
+  // must come back to that comparison, not to the chooser: getting back to a
+  // view of two large trees is not free, and a URL that does not name what it
+  // shows cannot be shared.
+  useEffect(() => {
+    if (!view.comparison || chosen?.id === view.comparison) return;
+    const found = pairs.find((pair) => pair.id === view.comparison);
+    if (found) setChosen(found);
+  }, [pairs, view.comparison, chosen]);
 
   useEffect(() => {
     if (!chosen || chosen.status !== "ready") {
@@ -63,7 +75,14 @@ export function App() {
           <span className="chip">{me.display_name || me.owner_id}</span>
         ) : null}
         {chosen ? (
-          <button type="button" className="link-button" onClick={() => setChosen(null)}>
+          <button
+            type="button"
+            className="link-button"
+            onClick={() => {
+              setChosen(null);
+              setView({ comparison: null, left: [], right: [] });
+            }}
+          >
             Choose another
           </button>
         ) : null}
@@ -74,7 +93,16 @@ export function App() {
       {chosen ? (
         <>
           {chosen.caution ? <p className="caution">{chosen.caution}</p> : null}
-          <ComparisonView key={chosen.id} pair={chosen} />
+          <ComparisonView
+            key={chosen.id}
+            pair={chosen}
+            initial={
+              view.comparison === chosen.id
+                ? { left: view.left, right: view.right }
+                : undefined
+            }
+            onNavigate={(l, r) => setView({ comparison: chosen.id, left: l, right: r })}
+          />
         </>
       ) : (
         <div className="chooser">
@@ -90,7 +118,10 @@ export function App() {
                       type="button"
                       className="pair"
                       disabled={pair.status !== "ready"}
-                      onClick={() => setChosen(pair)}
+                      onClick={() => {
+                        setChosen(pair);
+                        setView({ comparison: pair.id, left: [], right: [] });
+                      }}
                     >
                       <span className="pair-name">
                         {pair.left} vs {pair.right}
@@ -115,7 +146,10 @@ export function App() {
               const datasets = await api.datasets();
               setPairs(datasets.pairs);
               const built = datasets.pairs.find((pair) => pair.id === comparisonId);
-              if (built) setChosen(built);
+              if (built) {
+                setChosen(built);
+                setView({ comparison: built.id, left: [], right: [] });
+              }
             }}
           />
         </div>

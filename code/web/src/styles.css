@@ -92,6 +92,7 @@ body {
 .side-summary { background: var(--surface); padding: 8px 14px; }
 .side-name { margin: 0; font-size: 13px; color: var(--muted); }
 .side-name strong { color: var(--ink); }
+.selected-node { color: var(--accent); }
 .side-counts {
   margin: 2px 0 0;
   font-size: 12px;

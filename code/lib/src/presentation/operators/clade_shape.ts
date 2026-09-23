@@ -2,6 +2,17 @@ import type Sigma from "sigma";
 import type { NewickNode } from "../tree/types";
 import type { TreeViewer } from "../viewer/tree_viewer";
 import { countLeaves } from "../tree/model";
+
+/**
+ * How many leaves a collapsed clade stands for.
+ *
+ * `trueLeafCount` when the consumer supplied one — a server-summarised clade
+ * has no children to count, so walking it would report 1 and draw every wedge
+ * at minimum size regardless of whether it hides ten leaves or ten thousand.
+ */
+function hiddenLeaves(node: Parameters<typeof countLeaves>[0]): number {
+  return node.trueLeafCount ?? countLeaves(node);
+}
 import type { TreeOperator } from "./operator";
 
 export interface CladeShapeOptions {
@@ -162,7 +173,7 @@ export class CladeShapePresenter implements TreeOperator {
       // leads back to the real subtree, so the wedge reflects the true leaf
       // count rather than the truncated one.
       const source = node.source.origin ?? node.source;
-      const halfHeight = this.heightFor(countLeaves(source), saturateAt);
+      const halfHeight = this.heightFor(hiddenLeaves(source), saturateAt);
       const color =
         this.color ??
         (graph.hasNode(node.id)
@@ -170,7 +181,7 @@ export class CladeShapePresenter implements TreeOperator {
           : "#e05c5c");
 
       const el = this.makeWedge(halfHeight, color);
-      el.title = `${countLeaves(source)} leaves`;
+      el.title = `${hiddenLeaves(source).toLocaleString()} leaves`;
       this.layer.appendChild(el);
       this.wedges.set(node.id, { el, halfHeight });
     }

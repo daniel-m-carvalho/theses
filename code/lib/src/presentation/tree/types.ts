@@ -24,6 +24,18 @@ export interface NewickNode {
    */
   metadata?: Record<string, string | number | null>;
   /**
+   * How many leaves this node stands for in the **full** tree, when that is
+   * more than the subtree actually present.
+   *
+   * For a tree held whole in the browser this is absent and leaf counts are
+   * computed by walking. It exists for a consumer fed by a server that
+   * summarises: there, a collapsed clade arrives as a childless node standing
+   * for thousands of leaves, and nothing local could know how many. Wedge size
+   * and its tooltip read this; the **budget does not** — a wedge draws as one
+   * thing however much it represents.
+   */
+  trueLeafCount?: number;
+  /**
    * Set by {@link prepareTree} when a clade was truncated because it is
    * collapsed. Lets the layout style it as a collapsed marker rather than a
    * plain leaf, even though it now has no `branchset`.

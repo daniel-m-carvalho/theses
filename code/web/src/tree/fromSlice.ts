@@ -79,6 +79,10 @@ export function treeFromSlice(slice: TreeSlice): SliceTree {
 
     const node: NewickNode = {
       name,
+      // What this node stands for in the FULL tree. The library sizes a wedge
+      // and labels its tooltip from this; nothing local could work it out,
+      // because a summarised clade arrives with no children to count.
+      trueLeafCount: true_leaf_count[k],
       metadata: {
         storedId: id[k],
         trueLeafCount: true_leaf_count[k],

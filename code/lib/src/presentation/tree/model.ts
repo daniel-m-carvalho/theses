@@ -345,7 +345,11 @@ function prepareSubtree(
   if (leafBudget <= 0) return null;
 
   const isLeaf = !node.branchset?.length;
-  const collapsedHere = !isLeaf && isCollapsed(node);
+  // A node may arrive already flagged collapsed, with no children, because a
+  // server summarised it away. That is a clade, not a leaf: without this it
+  // would draw as an ordinary tip and the fact that it stands for thousands
+  // of leaves would be lost.
+  const collapsedHere = node.collapsed === true || (!isLeaf && isCollapsed(node));
 
   if (isLeaf || collapsedHere) {
     return terminal(
@@ -354,6 +358,8 @@ function prepareSubtree(
         length: node.length,
         category: node.category,
         metadata: node.metadata,
+        // Carried, not recomputed: nothing local can know it.
+        trueLeafCount: node.trueLeafCount,
         collapsed: collapsedHere,
         branchset: undefined,
         origin: node,
