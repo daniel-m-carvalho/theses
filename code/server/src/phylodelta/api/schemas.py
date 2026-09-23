@@ -410,3 +410,59 @@ class CompositionResponse(BaseModel):
     segment_by: str
     filter: dict[str, list[str]]
     leaves: list[LeafCompositionOut]
+
+
+class UploadAccepted(BaseModel):
+    """What a successful upload returns.
+
+    Deliberately small. The work has not happened yet, so there is nothing to
+    report but an id to poll and the state it starts in.
+    """
+
+    id: str = Field(
+        description=(
+            "The comparison's id, which is also its pair id: the two dataset "
+            "ids joined by '__'. The same id addresses it everywhere."
+        ),
+        examples=["d9529dbc86b7__5deb6bf91e89"],
+    )
+    status: str = Field(
+        description="Always 'pending' here; poll the status endpoint for the rest.",
+        examples=["pending"],
+    )
+    left_id: str = Field(description="Dataset id of the left tree.")
+    right_id: str = Field(description="Dataset id of the right tree.")
+    poll: str = Field(
+        description="The URL to poll until status leaves 'pending'.",
+        examples=["/api/v1/comparisons/d9529dbc86b7__5deb6bf91e89/status"],
+    )
+
+
+class ComparisonStatusResponse(BaseModel):
+    """Where an uploaded comparison has got to.
+
+    One endpoint answers for the whole bundle rather than one per dataset: a
+    comparison is what the user asked for, and either both trees are ingested
+    and compared or the thing they asked for is not ready.
+    """
+
+    id: str
+    status: str = Field(
+        description="pending | running | ready | failed.",
+        examples=["pending", "running", "ready", "failed"],
+    )
+    display_name: str
+    created_at: str = Field(description="ISO 8601, UTC.")
+    finished_at: str | None = Field(
+        None, description="ISO 8601, UTC. Null until it succeeds or fails."
+    )
+    error: str | None = Field(
+        None, description="Why it failed. Null unless status is 'failed'."
+    )
+    ready: bool = Field(
+        description=(
+            "True when the comparison endpoints will answer for this id. "
+            "Provided so a client polls one boolean rather than matching "
+            "status strings."
+        )
+    )

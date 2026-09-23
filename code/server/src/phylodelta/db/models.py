@@ -113,6 +113,12 @@ class Comparison(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     owner_id: Mapped[str] = mapped_column(String(128), index=True)
 
+    #: What the user calls this comparison. Held here rather than read from
+    #: either dataset: the user names the comparison, and reaching through a
+    #: relationship to answer a status poll would be a second query — and a
+    #: lazy load on a detached row.
+    display_name: Mapped[str] = mapped_column(String(255), default="")
+
     left_id: Mapped[str] = mapped_column(ForeignKey("datasets.id"))
     right_id: Mapped[str] = mapped_column(ForeignKey("datasets.id"))
 

@@ -2153,6 +2153,115 @@ one, because adding isolate data there would change what unrelated tests see.
 
 ---
 
+## 23. Receiving a bundle: 202, streamed, whole or not at all
+
+§21 settled *what* an upload is — two trees and their typing data in one request, because a
+comparison is the unit the user is asking for. This section is what implementing it decided.
+
+### 23.1 The request receives; it does not compute
+
+`POST /api/v1/comparisons` does three things: take the bytes, check they are plausible, write a
+`pending` row. It returns **202 Accepted**, which is the status code that means exactly that.
+
+It cannot do more. Ingesting a 500k-node tree and building its correspondence is seconds to minutes
+(§15) — 38 s for the largest pair measured, after threading. That is not work to do while a
+connection is held open and a proxy's read timeout runs down. The alternative, ingesting
+synchronously because *parsing alone* is fast (5–8 ms), was rejected: it would make the request
+duration depend on the input size, so the endpoint would work in testing and time out in use.
+
+What makes 202 safe is a property that already existed: **`dataset_for` serves only `ready` rows.**
+An uploaded tree is `pending` until a job has actually written its store, so there is no window in
+which a half-built store can be read as though it were finished. This is asserted rather than
+assumed — `test_an_uploaded_tree_is_not_servable_until_a_job_has_run` checks that the tree, its
+slice and its comparison all 404 immediately after a successful upload.
+
+### 23.2 Streaming, and what it was measured against
+
+Files are copied to disk in 1 MB chunks and the size limit is enforced **during** the copy, so an
+oversized upload is refused before it has been written in full rather than after.
+
+The endpoint is deliberately `def`, not `async def`. Reading an upload is blocking file I/O, and
+FastAPI runs a sync endpoint on a threadpool; in an `async def` the same reads would stall the event
+loop for every other request in the process. With 75 MB bundles that is not a subtlety.
+
+Measured, because "it streams" is the kind of claim that is easy to assert and easy to get wrong —
+six concurrent uploads of a 44 MB bundle (two 18 MB trees and an 8 MB table), throttled so they
+overlap:
+
+| | |
+|---|---|
+| baseline RSS | 27 MB |
+| peak RSS, six uploads in flight | **27 MB** |
+| request body concurrently in transit | 264 MB |
+| all six accepted | 202, 4.5 s each, 265 MB written |
+
+Memory did not move. Buffering would have shown ~264 MB.
+
+### 23.3 Validation is cheap at the door and thorough in the job
+
+The endpoint checks that a tree file is non-empty and begins `(` and ends `;`, and that a table has
+a tab-separated header — reading 4 KB from each end rather than the whole file. That catches the
+common mistake (the wrong file) immediately, with an error naming the field at fault.
+
+It does **not** parse. Full parsing belongs to the job, where a failure becomes a recorded `failed`
+status with a reason. Parsing in the request would put a 25 MB parse in the path of a response and
+still not remove the need for the job to handle failure — so it would buy a slightly better error
+message at the cost of the thing 23.1 is for.
+
+### 23.4 A bundle is whole or it is absent
+
+Three separate places, because the upload has three ways to half-succeed:
+
+* **On disk** — any refusal removes the whole bundle directory, so a rejected upload leaves no
+  fragments for a later job to find and mistake for work.
+* **In the database** — the two datasets and the comparison are written in one transaction. A
+  comparison referring to a dataset that is not there is not a state anything knows how to read, and
+  the foreign keys would refuse it anyway.
+* **Between the two** — if the database write fails after the bytes have landed, the bytes are
+  removed. An orphaned bundle is unreachable by any owner and unclaimable by any job.
+
+A `bundle.json` manifest is written last, and atomically. So a directory with a manifest is a
+complete bundle and one without is debris from an interrupted upload — which is what makes orphan
+cleanup possible without consulting the database.
+
+### 23.5 The comparison id is the pair id
+
+`Comparison.id` is `{left_id}__{right_id}`, which is the pair id the comparison endpoints already
+use. One identifier addresses a comparison everywhere rather than an upload id that must be
+translated into a pair id, which is a mapping to keep and a place for the two to disagree.
+
+Dataset ids are generated, not derived from filenames: two users uploading `tree.nwk` must not
+collide, and a name is not an identity. Asserted both ways — two uploads of the same bytes by one
+owner are two comparisons, and two owners uploading the same filename do not collide.
+
+`display_name` sits on the comparison row rather than being read through a relationship from either
+dataset. The user names the comparison, not the trees; and reaching through a relationship to answer
+a status poll is a second query and a lazy load on a detached row — which is precisely the bug that
+first appeared here.
+
+### 23.6 Status is polled at one endpoint, and answers for failure
+
+`GET /api/v1/comparisons/{id}/status` answers in every state, including `failed`. A client that can
+only observe success has to distinguish "still working" from "never going to work" by waiting. It
+carries a `ready` boolean as well as the status string, so a client polls a boolean rather than
+matching strings it would have to keep in step with this enum.
+
+It is one endpoint for the bundle rather than one per dataset: a comparison is what was asked for,
+and either it is ready or the thing the user wanted is not.
+
+### 23.7 Still open
+
+**Nothing runs the jobs yet.** The rows are written and stay `pending`; the queue is the next piece,
+and until it exists an upload is recorded but never processed.
+
+**The size limit is a guess.** 128 MB per file, overridable by `PHYLODELTA_MAX_UPLOAD_BYTES`, set
+against a 25 MB tree and a 12 MB table. It is a stop on a mistake filling the disk, not a quota —
+quotas and retention are still deferred (§19.6) because they need a deployment to be sized against.
+
+**Isolate datasets get no row at upload.** The species is not known until the tree is parsed, and
+the isolate store is registered under `isolates-{species}`; the manifest records which raw file
+plays which role until the job can name it properly.
+
 ## Findings carried forward
 
 Observations made during milestone 1 that constrain later work.

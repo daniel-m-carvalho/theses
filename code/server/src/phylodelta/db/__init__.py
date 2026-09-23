@@ -8,7 +8,15 @@ from .models import (
     DatasetKind,
     DatasetStatus,
 )
-from .queries import dataset_for, datasets_for, owns_all, register_dataset
+from .queries import (
+    comparison_for,
+    comparisons_for,
+    dataset_for,
+    datasets_for,
+    owns_all,
+    record_upload,
+    register_dataset,
+)
 from .session import (
     create_schema,
     database_url,
@@ -25,10 +33,13 @@ __all__ = [
     "Dataset",
     "DatasetKind",
     "DatasetStatus",
+    "comparison_for",
+    "comparisons_for",
     "create_schema",
     "dataset_for",
     "datasets_for",
     "owns_all",
+    "record_upload",
     "register_dataset",
     "database_url",
     "engine",

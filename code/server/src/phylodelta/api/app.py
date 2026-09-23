@@ -11,6 +11,7 @@ from .routes_comparisons import router as comparisons_router
 from .routes_isolates import router as isolates_router
 from .routes_meta import API_VERSION, router as meta_router
 from .routes_trees import router as trees_router
+from .routes_uploads import router as uploads_router
 
 DESCRIPTION = """
 Serves **slices** of large phylogenetic trees, the comparison values that go
@@ -101,6 +102,7 @@ TAGS = [
 ERROR_RESPONSES = {
     400: {"model": ErrorResponse, "description": "The request cannot be answered as asked."},
     404: {"model": ErrorResponse, "description": "No such tree, pair, metric, species or node."},
+    413: {"model": ErrorResponse, "description": "An uploaded file is larger than this server accepts."},
     422: {"model": ErrorResponse, "description": "A parameter or body value is not usable."},
 }
 
@@ -134,7 +136,13 @@ def create_app() -> FastAPI:
     )
 
     errors.install(app)
-    for router in (meta_router, trees_router, comparisons_router, isolates_router):
+    for router in (
+        meta_router,
+        trees_router,
+        comparisons_router,
+        uploads_router,
+        isolates_router,
+    ):
         app.include_router(router)
     return app
 
