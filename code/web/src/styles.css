@@ -312,8 +312,14 @@ body {
   border-top: 1px solid var(--line);
   background: var(--surface);
   padding: 8px 14px;
-  max-height: 140px;
-  overflow: auto;
+  /*
+   * Deliberately NOT `overflow: auto`. The column dropdown is an absolutely
+   * positioned child that opens upward, out of this box — and an
+   * overflow-scrolling ancestor clips exactly that. The menu was rendered and
+   * then cut away entirely: clicks at its position reached the tree canvas
+   * underneath, so the drawer looked dead. The swatch list carries the scroll
+   * instead, which is the part that actually grows.
+   */
 }
 .legend-head {
   display: flex;
@@ -387,6 +393,8 @@ body {
   list-style: none;
   margin: 0;
   padding: 0;
+  max-height: 84px;
+  overflow: auto;
   display: flex;
   flex-wrap: wrap;
   gap: 4px 14px;
