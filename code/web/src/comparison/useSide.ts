@@ -74,6 +74,17 @@ export function readableBudget(panelHeightPx: number): number {
  */
 export const EXPAND_ALL_LIMIT = 5_000;
 
+/**
+ * How much of the other tree a cross-tree jump should land in.
+ *
+ * Not a display preference — it is what stops a jump resolving to a tip. A
+ * leaf's match is exact and therefore itself a leaf, and a panel rooted at a
+ * leaf is one dot. Twenty is enough to show a neighbourhood and small enough
+ * to stay inside a normal panel's budget, so every tip is drawn and the leaf
+ * that was asked about is visible rather than summarised behind a wedge.
+ */
+export const JUMP_CONTEXT_LEAVES = 20;
+
 export interface SideState {
   treeId: string;
   slice: TreeSlice | null;
@@ -91,6 +102,17 @@ export interface SideState {
 
 export interface SideActions {
   focus: (storedId: number) => void;
+  /**
+   * Focus a node arriving from the *other* panel, widened to something
+   * readable first.
+   *
+   * A cross-tree match is a node id and nothing else — this panel's slice does
+   * not contain it, so its size and its ancestors are unknown here. Leaf
+   * matches are exact and therefore always tips, so focusing one directly drew
+   * a panel containing a single dot. The server resolves the ancestor; falling
+   * back to the bare node if that call fails is still better than not moving.
+   */
+  focusWithContext: (storedId: number) => void;
   back: () => void;
   reset: () => void;
   setBudget: (budget: number) => void;
@@ -178,14 +200,35 @@ export function useSide(
     // new names to reach it.
   }, [treeId, root, budget, compare, metric, nonce, labelClades]);
 
-  const actions: SideActions = {
-    focus: useCallback((storedId: number) => {
+  const focus = useCallback(
+    (storedId: number) => {
       setPath((current) =>
         current[current.length - 1] === storedId ? current : [...current, storedId],
       );
       setOverridden(false);
       setBudget(autoBudget);
-    }, [autoBudget]),
+    },
+    [autoBudget],
+  );
+
+  const actions: SideActions = {
+    focus,
+
+    focusWithContext: useCallback(
+      (storedId: number) => {
+        void api
+          // The ceiling is this panel's own budget: a subtree that fits draws
+          // every tip, so the node that was asked about is actually on screen
+          // rather than summarised behind a wedge.
+          .ancestor(treeId, storedId, {
+            minLeaves: JUMP_CONTEXT_LEAVES,
+            maxLeaves: Math.max(JUMP_CONTEXT_LEAVES, budget),
+          })
+          .then((context) => focus(context.node))
+          .catch(() => focus(storedId));
+      },
+      [treeId, budget, focus],
+    ),
 
     back: useCallback(() => setPath((current) => current.slice(0, -1)), []),
 

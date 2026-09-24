@@ -10,13 +10,7 @@ import realSlice from "../tree/__fixtures__/slice.json";
 import type { TreeSlice } from "../api/types";
 import { gradientFrom } from "../tree/comparisonValues";
 import { treeFromSlice } from "../tree/fromSlice";
-import {
-  buildMenu,
-  JUMP_CONTEXT_LEAVES,
-  jumpTargetFor,
-  menuTitle,
-  type PendingMenu,
-} from "./menuItems";
+import { buildMenu, jumpTargetFor, menuTitle, type PendingMenu } from "./menuItems";
 import { DEFAULT_BUDGET, EXPAND_ALL_LIMIT, type SideActions, type SideState } from "./useSide";
 
 const slice = realSlice as unknown as TreeSlice;
@@ -43,6 +37,7 @@ function actions(): SideActions & { calls: string[] } {
   return {
     calls,
     focus: vi.fn((id: number) => calls.push(`focus:${id}`)),
+    focusWithContext: vi.fn((id: number) => calls.push(`focusWithContext:${id}`)),
     back: vi.fn(() => calls.push("back")),
     reset: vi.fn(() => calls.push("reset")),
     setBudget: vi.fn(),
@@ -118,50 +113,38 @@ describe("right-clicking a node", () => {
     expect(leftAct.calls).toEqual([]);
   });
 
-  it("lands on a clade with structure, not on the bare leaf", () => {
-    // Rooting the other panel at a single leaf leaves one dot on screen, and
-    // at its immediate parent often just a cherry — two tips and a line say
-    // nothing about where you are.
+  it("points at the leaf's exact counterpart, not at a clade guess", () => {
+    // Leaves correspond by label, so this is the same sequence type on both
+    // sides. Asking from the parent instead would substitute a best-overlap
+    // guess for an exact answer, and still land on a tip.
     const left = sideOf();
     const leaf = [...left.tree!.leaves].find(
       (id) => jumpTargetFor(left, id) !== undefined,
     )!;
 
-    expect(jumpTargetFor(left, leaf)).not.toBe(left.gradient.correspondingTo(leaf));
+    expect(jumpTargetFor(left, leaf)).toBe(left.gradient.correspondingTo(leaf));
   });
 
-  it("asks the largest clade first and the bare leaf last", () => {
-    // The rule that matters: ask from a clade big enough that a *tip* cannot
-    // win the overlap. Correspondence puts no floor on the target's size, so
-    // asking from a two-leaf cherry `{a, b}` scores the lone leaf `{a}` at 0.5
-    // and nothing in a dissimilar tree beats it — which put one dot on screen
-    // for 400 of 400 sampled leaves of the real vibrio pair.
-    const base = sideOf();
-    const tree = base.tree!;
-    const leaf = [...tree.leaves].find((id) => tree.parentOfStoredId.has(id))!;
+  it("hands the target over to be widened, never focused bare", () => {
+    // A leaf's counterpart is itself a leaf, and a panel rooted at a leaf is
+    // one dot. The receiving panel has to widen it — only it knows its own
+    // budget, and only the server knows that node's ancestors.
+    const left = sideOf();
+    const right = sideOf({ treeId: "vibrio-upgma" });
+    const rightAct = actions();
+    const leaf = [...left.tree!.leaves].find(
+      (id) => jumpTargetFor(left, id) !== undefined,
+    )!;
 
-    // Only the leaf itself has a counterpart, so the rule must exhaust the
-    // ancestors before falling back to it — which also records the order.
-    const asked: number[] = [];
-    const left: SideState = {
-      ...base,
-      gradient: {
-        similarityOf: () => undefined,
-        correspondingTo: (id: number) => {
-          asked.push(id);
-          return id === leaf ? 99 : undefined;
-        },
-      },
-    };
+    const items = buildMenu(
+      { side: 0, at, storedId: leaf },
+      [left, right],
+      [actions(), rightAct],
+    );
+    by(items, "Find this leaf in the other tree").onSelect!();
 
-    expect(jumpTargetFor(left, leaf)).toBe(99);
-
-    const sizeOf = (id: number) => tree.trueLeafCountOf(tree.byStoredId.get(id)!) ?? 0;
-    expect(sizeOf(asked[0])).toBeGreaterThanOrEqual(JUMP_CONTEXT_LEAVES);
-    expect(asked[asked.length - 1]).toBe(leaf);
-    // It stops at the first ancestor large enough rather than walking to the
-    // root: everything below the one it asked first is still smaller.
-    expect(asked.slice(1).every((id) => sizeOf(id) < JUMP_CONTEXT_LEAVES)).toBe(true);
+    expect(rightAct.calls).toEqual([`focusWithContext:${jumpTargetFor(left, leaf)}`]);
+    expect(rightAct.focus).not.toHaveBeenCalled();
   });
 
   it("refuses to locate a clade, because that match is only an approximation", () => {

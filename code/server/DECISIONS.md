@@ -2766,6 +2766,65 @@ wire half arrived in §4.3.
 
 ---
 
+## 27. `GET /trees/{id}/ancestor`: the one thing a panel cannot work out
+
+Added (2026-09-24) after "find this leaf in the other tree" put a single dot on screen.
+
+### 27.1 Why a client cannot answer it
+
+A leaf's cross-tree match is **exact** — leaves correspond by label, so it is the same sequence type
+— and therefore the match is itself a leaf. A panel rooted at a leaf shows one dot and no context,
+which is the opposite of what the action is for.
+
+Widening has to happen on the receiving side, and that side cannot do it. Each panel holds its tree
+only as **the slice it asked for** (§4). A node arriving from the other panel is by construction
+outside that slice, so its size, its parent and its ancestors are all unknown locally. This is not
+an oversight in the client; it is the direct consequence of never shipping whole trees, and it is
+the first place that trade-off has cost something.
+
+An earlier client-side attempt asked correspondence about the leaf's **parent clade** instead,
+hoping a clade would be large enough. It was wrong twice. A clade corresponds by best overlap,
+which is an approximation, so it traded an exact answer for a guess; and it resolved to a tip
+anyway, because Jaccard gives a two-leaf cherry `{a, b}` an overlap of 0.5 with the bare leaf
+`{a}`, which nothing beats where the trees disagree. Measured over 400 sampled leaves of
+vibrio-nj vs vibrio-upgma, that rule returned a single leaf **400 times out of 400**.
+
+### 27.2 `min_leaves` is not enough on its own
+
+Climbing to the first ancestor holding 20 leaves looks sufficient and is not, because branch
+lengths do not make topology. On the ladder-shaped clades UPGMA produces, a tip's ancestors step
+
+```
+1 leaf  ->  2 leaves  ->  3,311 leaves
+```
+
+so the smallest ancestor meeting a floor of 20 is a tenth of the tree — at which point the slice
+budget summarises it and the tip that was asked about **disappears behind a wedge**. Widening too
+far fails the request exactly as rooting at the tip did.
+
+Hence a second bound, `max_leaves`, which the caller sets to **its own leaf budget**: a subtree that
+fits the budget is drawn tip for tip, so the node asked about is on screen. It overrides
+`min_leaves`, because too small is still legible and too large is not. It is deliberately **not**
+applied to the first step — a tip whose only parent is enormous has no readable ancestor, and
+returning the tip itself would be the failure this endpoint exists to prevent.
+
+End to end on the pair that showed the bug (clostridium leaf `2368` -> vibrio): the match is vibrio
+leaf `2368`, widened 12 levels to a 20-leaf clade, drawn as 20 of 20 leaves with **zero wedges**,
+with the target leaf among them.
+
+### 27.3 Cost
+
+A handful of integers off the memory-mapped `parent` and `leaf_count` columns — no topology is
+built and nothing is sent but four numbers. The response reports `climbed` and `reached_root` so a
+caller is told when the climb ran out of tree rather than being handed a number that silently
+missed the request.
+
+One bug found by the test rather than by reasoning: the `parent` column is **unsigned**, so the
+root's `-1` arrives as `4,294,967,295`. A `parent < 0` guard never fires and the climb walks off
+the end of the column. The bound is `0 <= parent < n_nodes`.
+
+---
+
 ## References and provenance
 
 Where every algorithm and every implementation came from. Bibliographic details are taken from the

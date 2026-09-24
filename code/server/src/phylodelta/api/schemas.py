@@ -191,6 +191,28 @@ class TreeDetail(TreeSummary):
     created: str = ""
 
 
+class NodeContext(BaseModel):
+    """An ancestor wide enough to be worth looking at.
+
+    Exists because "show me this node in the other tree" and "show me something
+    I can read" are different requests. A client holding one tree as a slice
+    knows nothing about another tree's ancestors, so it cannot widen a target
+    itself; this answers that one question without sending topology.
+    """
+
+    node: int = Field(description="The ancestor-or-self that was chosen.")
+    leaves: int = Field(description="Leaves in its subtree.")
+    climbed: int = Field(
+        description="Levels walked up from the node asked about. 0 means it already qualified."
+    )
+    reached_root: bool = Field(
+        description=(
+            "True when the climb stopped at the tree root without meeting "
+            "`min_leaves` — the answer is the widest there is, not a match."
+        )
+    )
+
+
 class SliceNodes(BaseModel):
     """A summarised subtree as parallel arrays, in pre-order.
 

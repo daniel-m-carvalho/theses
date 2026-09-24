@@ -14,6 +14,7 @@ import type {
   ComparisonStatus,
   ComparisonSummary,
   DatasetsResponse,
+  NodeContext,
   TreeSlice,
   UploadAccepted,
   WhoAmI,
@@ -93,6 +94,28 @@ export const api = {
     if (options.order) query.set("order", options.order);
     return request<TreeSlice>(
       `/trees/${encodeURIComponent(treeId)}/slice?${query}`,
+      { signal: options.signal },
+    );
+  },
+
+  /**
+   * The nearest ancestor of `node` worth rooting a view at.
+   *
+   * Needed because a panel holds its tree only as the slice it asked for, so
+   * it knows nothing about the ancestors of a node in the *other* tree — and
+   * "find this leaf over there" resolves to exactly that: a node outside the
+   * other panel's slice, usually a tip, which alone draws as one dot.
+   */
+  ancestor: (
+    treeId: string,
+    node: number,
+    options: { minLeaves?: number; maxLeaves?: number; signal?: AbortSignal } = {},
+  ) => {
+    const query = new URLSearchParams({ node: String(node) });
+    if (options.minLeaves !== undefined) query.set("min_leaves", String(options.minLeaves));
+    if (options.maxLeaves !== undefined) query.set("max_leaves", String(options.maxLeaves));
+    return request<NodeContext>(
+      `/trees/${encodeURIComponent(treeId)}/ancestor?${query}`,
       { signal: options.signal },
     );
   },

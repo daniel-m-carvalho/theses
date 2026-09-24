@@ -168,3 +168,13 @@ export interface CompositionResponse {
   filter: Record<string, string[]>;
   leaves: LeafComposition[];
 }
+
+/** The nearest ancestor of a node that is worth rooting a view at. */
+export interface NodeContext {
+  node: number;
+  leaves: number;
+  /** Levels walked up. 0 means the node already qualified. */
+  climbed: number;
+  /** The climb hit the root without meeting `min_leaves`. */
+  reached_root: boolean;
+}

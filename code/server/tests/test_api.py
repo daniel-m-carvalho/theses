@@ -219,3 +219,81 @@ def test_slice_is_fast_enough_to_feel_instant(client):
         client.get("/api/v1/trees/vibrio-upgma/slice", params={"budget": 500})
     per_call_ms = (time.perf_counter() - started) / 5 * 1000
     assert per_call_ms < 50, f"{per_call_ms:.1f} ms per slice"
+
+
+def _ancestor(client, node, **params):
+    got = client.get(
+        "/api/v1/trees/vibrio-upgma/ancestor", params={"node": node, **params}
+    )
+    assert got.status_code == 200, got.text
+    return got.json()
+
+
+def test_ancestor_climbs_a_tip_to_something_worth_drawing(client):
+    # The bug this exists for: a jump resolved to a leaf, and a panel rooted at
+    # a leaf is one dot. Any tip must come back as a clade.
+    leaf = client.get(
+        "/api/v1/trees/vibrio-upgma/slice", params={"budget": 50}
+    ).json()
+    tip = next(
+        i
+        for i, (n, cut) in enumerate(
+            zip(leaf["nodes"]["true_leaf_count"], leaf["nodes"]["truncated"])
+        )
+        if n == 1 and not cut
+    )
+    tip_id = leaf["nodes"]["id"][tip]
+
+    got = _ancestor(client, tip_id, min_leaves=20)
+    assert got["leaves"] >= 20
+    assert got["climbed"] > 0
+    assert got["node"] != tip_id
+
+
+def test_ancestor_keeps_a_node_that_already_qualifies(client):
+    got = _ancestor(client, 0, min_leaves=20)
+    assert got == {
+        "node": 0,
+        "leaves": 17_646,
+        "climbed": 0,
+        "reached_root": False,
+    }
+
+
+def test_ancestor_stops_before_overshooting_the_callers_budget(client):
+    # Ladder-shaped clades step 1, 2, thousands: the smallest ancestor meeting
+    # a floor of 20 can be most of the tree, which hides the very node that was
+    # asked about. A ceiling keeps the answer drawable.
+    slice_ = client.get("/api/v1/trees/vibrio-upgma/slice", params={"budget": 50}).json()
+    tips = [
+        i
+        for i, (n, cut) in enumerate(
+            zip(slice_["nodes"]["true_leaf_count"], slice_["nodes"]["truncated"])
+        )
+        if n == 1 and not cut
+    ]
+    for at in tips:
+        tip_id = slice_["nodes"]["id"][at]
+        bounded = _ancestor(client, tip_id, min_leaves=20, max_leaves=60)
+        # Never the bare tip, which is the whole point, and never the huge
+        # ancestor a bare floor would have picked — unless one step is all the
+        # topology offers, in which case too large still beats one dot.
+        assert bounded["leaves"] > 1
+        assert bounded["leaves"] <= 60 or bounded["climbed"] == 1
+
+
+def test_ancestor_says_when_it_ran_out_of_tree(client):
+    # A floor no ancestor can meet must be reported, not silently missed.
+    got = _ancestor(client, 0, min_leaves=50_000)
+    assert got["reached_root"] is True
+    assert got["node"] == 0
+    assert got["leaves"] < 50_000
+
+
+def test_ancestor_rejects_a_node_outside_the_tree(client):
+    assert (
+        client.get(
+            "/api/v1/trees/vibrio-upgma/ancestor", params={"node": 10_000_000}
+        ).status_code
+        == 404
+    )

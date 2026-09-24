@@ -16,7 +16,7 @@ from . import errors
 from .access import tree_or_404
 from .identity import current_owner
 from .routes_meta import API_PREFIX
-from .schemas import SliceNodes, TreeDetail, TreeSlice
+from .schemas import NodeContext, SliceNodes, TreeDetail, TreeSlice
 from .access import pair_or_404 as access_pair
 from .slicing import ORDER_DESCRIPTION, Order, side_of, summariser_for
 
@@ -49,6 +49,85 @@ def tree_detail(
         id=meta.id, species=meta.species, method=meta.method,
         n_nodes=meta.n_nodes, n_leaves=meta.n_leaves, max_depth=meta.max_depth,
         source=meta.source, suppressed_unary=meta.suppressed_unary, created=meta.created,
+    )
+
+
+@router.get(
+    "/{tree_id}/ancestor",
+    response_model=NodeContext,
+    summary="The nearest ancestor big enough to be worth showing",
+)
+def tree_ancestor(
+    tree_id: str = Path(examples=["vibrio-upgma"]),
+    node: int = Query(ge=0, description="Stored node id to start from."),
+    min_leaves: int = Query(
+        20, ge=1, le=MAX_BUDGET, description="Smallest subtree worth rooting a view at."
+    ),
+    max_leaves: int | None = Query(
+        None,
+        ge=1,
+        le=MAX_BUDGET,
+        description=(
+            "Stop before a subtree larger than this, even if `min_leaves` was "
+            "not met. Pass the caller's own leaf budget: a subtree within it "
+            "draws every tip, so the node asked about stays visible instead of "
+            "disappearing behind a wedge. Best-effort — a node whose only "
+            "parent is larger still returns that parent, never itself."
+        ),
+    ),
+    owner: str = Depends(current_owner),
+) -> NodeContext:
+    """Climb from `node` to an ancestor-or-self worth rooting a view at.
+
+    Answers one question the client provably cannot: it holds the other tree
+    only as the slice it asked for, so a node outside that slice has no known
+    ancestors there. Without this, "find this leaf in the other tree" rooted a
+    panel at a single tip — a view of nothing — whenever the match was a leaf,
+    which for a leaf matched by label it always is.
+
+    `min_leaves` alone is not enough, because branch lengths do not make
+    topology: on the ladder-shaped clades UPGMA produces, the ancestors of a
+    tip run 1, 2, 2478, so the smallest one meeting a floor of 20 is a tenth of
+    the tree, and the tip the caller asked about ends up summarised behind a
+    wedge. `max_leaves` keeps the answer local when the topology offers nothing
+    in between; it wins over `min_leaves`, since too small is legible and too
+    large is not.
+
+    Walks the memory-mapped parent column, so it reads a handful of integers
+    rather than materialising the tree.
+    """
+    reader = tree_or_404(owner, tree_id)
+    if node >= reader.meta.n_nodes:
+        raise errors.not_found(
+            "node_out_of_range",
+            f"Node {node} is outside {tree_id!r}, which has "
+            f"{reader.meta.n_nodes:,} nodes (0..{reader.meta.n_nodes - 1}).",
+            "Node ids come from a slice's nodes.id, not from the source file.",
+        )
+
+    nodes = reader.meta.n_nodes
+    at, climbed = node, 0
+    while reader.leaf_count_of(at) < min_leaves:
+        parent = reader.parent_of(at)
+        # The parent column is UNSIGNED, so the root's "-1" arrives as
+        # 4,294,967,295 — a `parent < 0` test never fires and the climb walks
+        # straight off the end of the column. Anything outside the tree means
+        # there is nowhere further to go, and the caller is told so rather than
+        # being handed a number that silently missed the request.
+        if not 0 <= parent < nodes or parent == at:
+            return NodeContext(
+                node=at, leaves=reader.leaf_count_of(at), climbed=climbed, reached_root=True
+            )
+        # Best-effort ceiling, and deliberately not applied to the first step:
+        # a node whose only parent is enormous has no readable ancestor, and
+        # returning the node itself would be the single dot this endpoint
+        # exists to prevent. Too large beats nothing at all; too small does not.
+        if climbed and max_leaves is not None and reader.leaf_count_of(parent) > max_leaves:
+            break
+        at, climbed = parent, climbed + 1
+
+    return NodeContext(
+        node=at, leaves=reader.leaf_count_of(at), climbed=climbed, reached_root=False
     )
 
 
