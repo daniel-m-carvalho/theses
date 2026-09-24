@@ -22,6 +22,8 @@ export function App() {
   const [pairs, setPairs] = useState<PairSummary[]>([]);
   const [datasets, setDatasets] = useState<DatasetsResponse | null>(null);
   const [showTyping, setShowTyping] = useState(false);
+  // Divergence colouring is on by default: it is what the comparison is for.
+  const [showGradient, setShowGradient] = useState(true);
   const [view, setView] = useUrlState();
   const [chosen, setChosen] = useState<PairSummary | null>(null);
   const [summary, setSummary] = useState<ComparisonSummary | null>(null);
@@ -83,6 +85,19 @@ export function App() {
           <span className="chip">{me.display_name || me.owner_id}</span>
         ) : null}
         {chosen ? (
+          <label
+            className="switch inline"
+            title="Colour branches by how much the two trees disagree there"
+          >
+            <input
+              type="checkbox"
+              checked={showGradient}
+              onChange={(event) => setShowGradient(event.target.checked)}
+            />
+            Divergence
+          </label>
+        ) : null}
+        {chosen ? (
           <label className="switch inline" title="Show isolate composition per leaf">
             <input
               type="checkbox"
@@ -122,6 +137,7 @@ export function App() {
             onNavigate={(l, r) => setView({ comparison: chosen.id, left: l, right: r })}
             isolateSets={isolateSetsFor(chosen, datasets)}
             showTyping={showTyping}
+            showGradient={showGradient}
           />
         </>
       ) : (

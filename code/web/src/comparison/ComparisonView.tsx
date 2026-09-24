@@ -142,6 +142,7 @@ export function ComparisonView({
   onNavigate,
   isolateSets = [null, null],
   showTyping = false,
+  showGradient = true,
 }: {
   pair: PairSummary;
   initial?: { left: number[]; right: number[] };
@@ -149,6 +150,7 @@ export function ComparisonView({
   /** Isolate-set id per side; null where that tree has no typing data. */
   isolateSets?: [string | null, string | null];
   showTyping?: boolean;
+  showGradient?: boolean;
 }) {
   // Both panels are the same height, so one measurement serves both — and
   // both must ask for the same detail or the two sides stop being comparable
@@ -325,6 +327,16 @@ export function ComparisonView({
   useEffect(() => {
     onNavigate?.(left.path, right.path);
   }, [left.path, right.path, onNavigate]);
+
+  // The divergence gradient is a presentation, not a fact about the data, so
+  // it is switched rather than rebuilt: the operator keeps its values and
+  // simply stops colouring. Turning it off also hides its own legend, which
+  // the operator handles.
+  useEffect(() => {
+    handle.current?.panels.forEach((panel) => {
+      panel.operators.comparison?.setEnabled(showGradient);
+    });
+  }, [showGradient]);
 
   // Feed the bar charts, and keep the legend in step with the scale that is
   // actually colouring them. The scale is primed with every category present
