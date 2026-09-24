@@ -18,6 +18,6 @@ export const COLOR_TARGETS: ReadonlyArray<{
   label: string;
   note: string;
 }> = [
-  { key: "branches", label: "Branches", note: "colour the branch into each clade" },
-  { key: "clades", label: "Clades", note: "colour the wedge itself" },
+  { key: "branches", label: "Branches", note: "Colour the branch into each clade" },
+  { key: "clades", label: "Clades", note: "Colour the wedge itself" },
 ];

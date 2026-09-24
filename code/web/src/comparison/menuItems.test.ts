@@ -91,7 +91,7 @@ describe("right-clicking a node", () => {
     const already = sideOf({ path: [storedId], canGoBack: true });
 
     const items = buildMenu({ side: 0, at, storedId }, [already, sideOf()], [actions(), actions()]);
-    expect(by(items, "Expand this clade").disabledBecause).toMatch(/already showing/);
+    expect(by(items, "Expand this clade").disabledBecause).toMatch(/Already showing/);
     expect(by(items, "Expand this clade").onSelect).toBeUndefined();
   });
 
@@ -191,7 +191,7 @@ describe("right-clicking a node", () => {
       [actions(), actions()],
     );
     const jump = by(items, "Find this leaf in the other tree");
-    expect(jump.disabledBecause).toMatch(/only leaves can be located/);
+    expect(jump.disabledBecause).toMatch(/Only leaves can be located/);
     expect(jump.onSelect).toBeUndefined();
   });
 
@@ -253,8 +253,8 @@ describe("right-clicking empty canvas", () => {
 describe("going back", () => {
   it("is refused at the whole tree, with the reason", () => {
     const items = buildMenu({ side: 0, at }, [sideOf(), sideOf()], [actions(), actions()]);
-    expect(by(items, "Go back").disabledBecause).toMatch(/already at the whole tree/);
-    expect(by(items, "Reset to the whole tree").disabledBecause).toMatch(/already showing/);
+    expect(by(items, "Go back").disabledBecause).toMatch(/Already at the whole tree/);
+    expect(by(items, "Reset to the whole tree").disabledBecause).toMatch(/Already showing/);
   });
 
   it("is offered once a subtree has been entered", () => {
@@ -264,7 +264,7 @@ describe("going back", () => {
 
     const back = by(items, "Go back");
     expect(back.disabledBecause).toBeUndefined();
-    expect(back.detail).toBe("one level out of 2");
+    expect(back.detail).toBe("One level out of 2");
     back.onSelect!();
     by(items, "Reset to the whole tree").onSelect!();
     expect(act.calls).toEqual(["back", "reset"]);

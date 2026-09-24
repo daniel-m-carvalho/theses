@@ -188,18 +188,19 @@ function viewSetup(view: ComparisonView): Report["sections"][number] {
     );
     swatches.push(
       {
-        label: "identical — the same clade in both trees",
+        label: "Identical — the same clade in both trees",
         color: view.gradientEnds?.identical ?? "#1d4ed8",
       },
       {
-        label: "diverged — shares few leaves with its best match",
+        label: "Diverged — shares few leaves with its best match",
         color: view.gradientEnds?.diverged ?? "#ffd400",
       },
     );
     if (view.absent) {
       body.push(
-        "Branches left in the tree's own colour carry no value: the metric had " +
-          "nothing to say about them, which is not the same as a score of zero.",
+        "Branches in the third colour carry no value at all: the leaf is absent " +
+          "from the other tree, so the metric has nothing to say about it — which " +
+          "is not the same as a score of zero.",
       );
       swatches.push({ label: view.absent.label, color: view.absent.color });
     }

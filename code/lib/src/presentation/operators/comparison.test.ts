@@ -338,25 +338,39 @@ describe("how long a located node stays marked", () => {
 
 describe("branches the backend gave no value for", () => {
   // Cross-species pairs share few leaves, so most of a panel can be in this
-  // state. Uncoloured is the right drawing — a fabricated mid-scale colour
-  // would be a lie — but a legend running "identical → diverged" then has a
-  // third appearance on screen and no key for it.
+  // state. They are not on the scale at all — no counterpart means no score,
+  // which is not a score of zero — so they get a colour and a row of their own.
   const partial = () => new Map([["a", 0]]);
 
-  it("adds a legend row once such a branch is drawn", () => {
+  it("paints them in the colour given, not from the ramp", () => {
     const h = makeHarness(namedTree());
     new ComparisonOperator({
       enabled: true,
       values: partial(),
       keyOf: keyByName,
-      absentLabel: "not in the other tree",
+      scale: new SequentialColorScale({ stops: ["#000000", "#ffffff"] }),
+      absentColor: "#e03131",
     }).attach(h.viewer);
     h.render();
 
-    expect(h.container.textContent).toContain("not in the other tree");
+    expect(h.edgeStyleOf("named_c")!.color).toBe("#e03131");
+    expect(h.edgeStyleOf("named_a")!.color).not.toBe("#e03131");
   });
 
-  it("says nothing when every branch has a value", () => {
+  it("leaves them alone when no colour was chosen", () => {
+    const h = makeHarness(namedTree());
+    const before = h.edgeStyleOf("named_c")!.color;
+    new ComparisonOperator({ enabled: true, values: partial(), keyOf: keyByName }).attach(
+      h.viewer,
+    );
+    h.render();
+
+    expect(h.edgeStyleOf("named_c")!.color).toBe(before);
+  });
+
+  it("always shows the legend row, even where nothing is missing", () => {
+    // A key that appears and disappears as you navigate is a key you cannot
+    // learn, and the gradient beside it is not conditional either.
     const h = makeHarness(namedTree());
     const every = new Map(
       [...h.nodeMap().values()].map((n) => [n.source.name ?? "", 0.5] as const),
@@ -365,12 +379,11 @@ describe("branches the backend gave no value for", () => {
       enabled: true,
       values: every,
       keyOf: keyByName,
-      absentLabel: "not in the other tree",
+      absentLabel: "Not in the other tree",
     }).attach(h.viewer);
     h.render();
 
-    // A view that contains no such case must not be told about it.
-    expect(h.container.textContent).not.toContain("not in the other tree");
+    expect(h.container.textContent).toContain("Not in the other tree");
   });
 
   it("stays silent unless a label was asked for", () => {
@@ -380,6 +393,6 @@ describe("branches the backend gave no value for", () => {
     );
     h.render();
 
-    expect(h.container.textContent).not.toContain("not in the other tree");
+    expect(h.container.textContent).not.toContain("Not in the other tree");
   });
 });

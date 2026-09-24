@@ -66,19 +66,23 @@ export interface ComparisonOptions {
   /**
    * Legend row for nodes the backend gave **no value** for, in gradient mode.
    *
-   * Those branches keep the tree's own colour rather than being coloured from
-   * the ramp — absent data must look absent, never a fabricated mid-scale
-   * value — which leaves an uncoloured branch on screen that the gradient
-   * legend does not account for. On a pair of trees sharing most of their
-   * leaves there are none; across species there are thousands, and without
-   * this the picture has a third colour and no key.
+   * Those nodes are not on the scale at all: no counterpart means no score,
+   * which is not a score of zero. They therefore need a colour of their own and
+   * a row of their own, and the row is shown **whenever this is set**, not only
+   * when such a node happens to be in view. A key that appears and disappears
+   * as you navigate is a key you cannot learn, and its absence would read as
+   * "this view has none" only to someone who already knew the rule.
    *
-   * The row appears only when such a node is actually on screen, so a view
-   * that has none is not told about a case it does not contain. Unset means no
-   * row at all.
+   * Unset means no row and no special colour.
    */
   absentLabel?: string;
-  /** Swatch colour for {@link absentLabel}. Default: the tree's branch colour. */
+  /**
+   * Colour for those branches. Unset leaves them exactly as the tree drew them.
+   *
+   * Worth setting to something loud. The default tree colour is also what an
+   * unstyled branch looks like, so "no data" and "nothing has happened here"
+   * become the same picture.
+   */
   absentColor?: string;
   /** Presentation strategy (default "gradient"). See {@link ComparisonMode}. */
   mode?: ComparisonMode;
@@ -165,9 +169,7 @@ export class ComparisonOperator implements TreeOperator {
   private colorNodes: boolean;
   private leafColor: string;
   private absentLabel?: string;
-  private absentColor: string;
-  /** Whether the last colouring pass met a node with no value. */
-  private sawAbsent = false;
+  private absentColor?: string;
   private mode: ComparisonMode;
   private differing?: DifferenceSet;
   private isDifferentFn?: DifferencePredicate;
@@ -203,7 +205,7 @@ export class ComparisonOperator implements TreeOperator {
     this.colorNodes = options.colorNodes ?? false;
     this.leafColor = options.leafColor ?? "#212529";
     this.absentLabel = options.absentLabel;
-    this.absentColor = options.absentColor ?? BRANCH_COLOR;
+    this.absentColor = options.absentColor;
     this.mode = options.mode ?? "gradient";
     this.differing = options.differing ? new Set(options.differing) : undefined;
     this.isDifferentFn = options.isDifferent;
@@ -211,9 +213,9 @@ export class ComparisonOperator implements TreeOperator {
     this.markerSize = options.markerSize ?? 6;
     this.flashes = Math.max(1, Math.round(options.flashes ?? 3));
     this.flashInterval = Math.max(50, options.flashInterval ?? 300);
-    this.membershipLabels = options.membershipLabels ?? ["different", "equal"];
+    this.membershipLabels = options.membershipLabels ?? ["Different", "Equal"];
     this.showLegend = options.legend ?? true;
-    this.legendLabels = options.legendLabels ?? ["different", "similar"];
+    this.legendLabels = options.legendLabels ?? ["Different", "Similar"];
     this.correspondence = options.correspondence;
     this.enabled = options.enabled ?? true;
 
@@ -340,9 +342,12 @@ export class ComparisonOperator implements TreeOperator {
     // so the colored path continues all the way to the tips. (Only the leaf
     // *marker* stays neutral — see nodeStyle.)
     const value = this.valueForNode(layoutNode.source);
-    // Left exactly as the tree drew it — absent data must look absent, never a
-    // fabricated mid-scale colour. `absentLabel` is what tells the reader so.
-    if (value == null) return data;
+    // Never coloured from the ramp — a node with no counterpart has no score,
+    // and a fabricated mid-scale value would be a lie. `absentColor` gives it
+    // a colour of its own instead; see the option.
+    if (value == null) {
+      return this.absentColor ? { ...data, color: this.absentColor } : data;
+    }
     return { ...data, color: this.scale.color(value), size: this.edgeWidth };
   }
 
@@ -400,7 +405,6 @@ export class ComparisonOperator implements TreeOperator {
   }
 
   private refresh(): void {
-    this.updateAbsent();
     this.viewer?.applyReducers();
     this.viewer?.applyEdgeReducers();
   }
@@ -495,9 +499,6 @@ export class ComparisonOperator implements TreeOperator {
   /** Re-attach overlays after a rebuild (Sigma.kill empties the container). */
   private onRender(): void {
     this.attachOverlays();
-    // A new tree means a new answer to "is anything here uncomparable", and
-    // the legend is rebuilt from scratch by attachOverlays.
-    this.sawAbsent = false;
     this.refresh();
     this.renderLegend();
   }
@@ -562,33 +563,6 @@ export class ComparisonOperator implements TreeOperator {
    * (Re)fill the legend for the current mode: a gradient bar for value coloring,
    * or two labeled swatches (different / equal) for membership coloring.
    */
-  /**
-   * Does anything currently on screen lack a value?
-   *
-   * Asked of the data rather than noticed while colouring. A reducer runs only
-   * when the renderer asks it to and may be skipped for nodes off-screen, so a
-   * legend driven by that side effect describes whatever happened to be drawn
-   * last. This walks the layout the panel is showing — a few hundred nodes in
-   * a slice — and gives the same answer every time.
-   *
-   * Re-evaluated on every refresh: a subtree where every leaf has a
-   * counterpart must not keep a row inherited from one where some did not.
-   */
-  private updateAbsent(): void {
-    if (!this.absentLabel) return;
-    const map = this.viewer?.getNodeMap();
-    let absent = false;
-    for (const layoutNode of map?.values() ?? []) {
-      if (this.valueForNode(layoutNode.source) == null) {
-        absent = true;
-        break;
-      }
-    }
-    if (absent === this.sawAbsent) return;
-    this.sawAbsent = absent;
-    this.renderLegend();
-  }
-
   private renderLegend(): void {
     this.legendEl.innerHTML = "";
 
@@ -619,8 +593,10 @@ export class ComparisonOperator implements TreeOperator {
     this.legendEl.appendChild(gradient);
     this.legendEl.appendChild(labels);
 
-    if (this.absentLabel && this.sawAbsent) {
-      this.legendEl.appendChild(this.swatchRow(this.absentColor, this.absentLabel));
+    if (this.absentLabel) {
+      this.legendEl.appendChild(
+        this.swatchRow(this.absentColor ?? BRANCH_COLOR, this.absentLabel),
+      );
     }
   }
 

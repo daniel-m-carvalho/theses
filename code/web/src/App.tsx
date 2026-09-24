@@ -116,19 +116,19 @@ export function App() {
                 key: "gradient",
                 label: "Divergence",
                 checked: options.gradient,
-                note: "colour by how much the trees disagree",
+                note: "Colour by how much the trees disagree",
               },
               {
                 key: "typing",
                 label: "Typing data",
                 checked: options.typing,
-                note: "a bar of isolates on each leaf",
+                note: "A bar of isolates on each leaf",
               },
               {
                 key: "clades",
                 label: "Clade sizes",
                 checked: options.cladeSizes,
-                note: "label every collapsed clade with its leaf count",
+                note: "Label every collapsed clade with its leaf count",
               },
               // Where the gradient lands, not whether it is on — so the choice
               // is offered only while there is one to place.

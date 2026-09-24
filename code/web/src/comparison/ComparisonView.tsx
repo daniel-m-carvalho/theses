@@ -130,13 +130,15 @@ const ARRIVAL_FLASHES = 5;
  * name it. Across species it is most of a panel: clostridium-upgma against
  * vibrio-nj shares 17,489 of 27,962 leaves, so 10,473 are drawn this way.
  */
-const ABSENT_LABEL = "not in the other tree";
-const ABSENT_COLOR = "#000000";
+const ABSENT_LABEL = "Not in the other tree";
+/*
+ * Red, and deliberately not the tree's own colour: black is also what an
+ * unstyled branch looks like, so "no data" and "nothing has happened here"
+ * read as the same picture. A shade rather than pure red, which the arrival
+ * flash uses — that one pulses on a node marker, this one is a static branch.
+ */
+const ABSENT_COLOR = "#e03131";
 
-/** Whether a slice contains a node the backend gave no similarity for. */
-function hasUnvalued(slice: { comparison?: { similarity: (number | null)[] } | null } | null) {
-  return (slice?.comparison?.similarity ?? []).some((value) => value === null);
-}
 
 const CONFIG: Config = {
   panels: [
@@ -180,7 +182,7 @@ const CONFIG: Config = {
     colorNodes: false,
     flashes: ARRIVAL_FLASHES,
     legend: true,
-    legendLabels: ["identical", "diverged"],
+    legendLabels: ["Identical", "Diverged"],
     /*
      * The third thing on screen. A leaf reconciliation dropped has no
      * counterpart and therefore no similarity, so its branch keeps the tree's
@@ -191,6 +193,7 @@ const CONFIG: Config = {
      * this way.
      */
     absentLabel: ABSENT_LABEL,
+    absentColor: ABSENT_COLOR,
   },
   /**
    * Panels are NOT linked.
@@ -633,13 +636,12 @@ export function ComparisonView({
               identical: DIFF_PALETTE[0],
               diverged: DIFF_PALETTE[DIFF_PALETTE.length - 1],
             },
-            // Only when the panels actually held such branches, so a report of
-            // two closely related trees is not told about a case it does not
-            // contain — the same rule the on-screen legend follows.
-            absent:
-              options.gradient && [left.slice, right.slice].some(hasUnvalued)
-                ? { label: ABSENT_LABEL, color: ABSENT_COLOR }
-                : undefined,
+            // Unconditional, as on screen: a colour key that lists only what
+            // this particular view happened to contain cannot be learnt, and
+            // the reader of a report cannot navigate to find out.
+            absent: options.gradient
+              ? { label: ABSENT_LABEL, color: ABSENT_COLOR }
+              : undefined,
           },
           `${choices.title.replace(/[^\w.-]+/g, "-").toLowerCase()}.html`,
         );

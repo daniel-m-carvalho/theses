@@ -2933,13 +2933,22 @@ What was wrong is that **the legend ran "identical → diverged" and never menti
 a picture with three appearances and a key for two. Across species that is most of a panel:
 clostridium-upgma against vibrio-nj shares 17,489 of 27,962 leaves, so 10,473 are drawn this way.
 
-So the gradient legend gains an optional `absentLabel` row, and the export's colour key gains the
-matching swatch. Both appear **only when such a branch is actually on screen**, so a pair of closely
-related trees is not told about a case it does not contain — confirmed in the browser, where the
-clostridium panel showed the row and the vibrio panel did not. The operator decides this by walking
-the layout it is showing rather than by noticing absences while colouring: a reducer runs only when
-the renderer asks it to, so a legend driven by that side effect describes whatever happened to be
-drawn last.
+So those branches are drawn **red** (`absentColor`), and the gradient legend gains a matching
+`absentLabel` row, as does the export's colour key. Red rather than the tree's own black: black is
+also what an unstyled branch looks like, so "no data" and "nothing has happened here" read as the
+same picture, and the whole point is that these two are different.
+
+The row is shown **whenever the option is set** — in both panels, always, exactly like the gradient
+beside it. A first version showed it only when such a branch was in view, which is wrong for the
+same reason a disappearing axis would be: a key that comes and goes as you navigate is a key you
+cannot learn, and its absence reads as "none here" only to someone who already knows the rule.
+(That version also had to detect the condition, which it did by walking the layout rather than by
+noticing absences while colouring — a reducer runs only when the renderer asks it to, so a legend
+driven by that side effect describes whatever happened to be drawn last. Removing the condition
+removed the problem.)
+
+Legend and colour-key text is sentence case throughout: **Identical**, **Diverged**, **Not in the
+other tree**.
 
 The same finding renamed a legend entry in the export. "diverged — no counterpart in the other tree"
 was wrong twice over once black exists, since *that* is what having no counterpart looks like; the

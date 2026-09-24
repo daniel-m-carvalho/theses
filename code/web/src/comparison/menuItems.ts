@@ -89,11 +89,11 @@ export function buildMenu(
       detail: leaves > 1 ? `${leaves.toLocaleString()} leaves — fetches a new slice` : undefined,
       disabledBecause:
         !node
-          ? "this node is not in the current slice"
+          ? "This node is not in the current slice"
           : leaves <= 1
-            ? "a single leaf has nothing to expand"
+            ? "A single leaf has nothing to expand"
             : alreadyHere
-              ? "already showing this subtree"
+              ? "Already showing this subtree"
               : undefined,
       onSelect:
         !node || leaves <= 1 || alreadyHere ? undefined : () => act.focus(storedId),
@@ -110,14 +110,14 @@ export function buildMenu(
     items.push({
       label: "Find this leaf in the other tree",
       detail:
-        partner !== undefined ? `shows its clade in ${there.treeId}` : undefined,
+        partner !== undefined ? `Shows its clade in ${there.treeId}` : undefined,
       // Only a clade is refused outright, because for a clade the action is
       // the wrong tool. A leaf with no counterpart stays clickable and answers
       // when clicked: "this leaf is not in the other tree" is the result of
       // asking, not a reason the question cannot be put, and a greyed-out item
       // makes the reader work out which of the two it is.
       disabledBecause: !isLeaf
-        ? "only leaves can be located exactly; a clade is matched by overlap"
+        ? "Only leaves can be located exactly; a clade is matched by overlap"
         : undefined,
       onSelect: !isLeaf
         ? undefined
@@ -146,29 +146,29 @@ export function buildMenu(
     // is the thing being measured. Asking for every leaf of a 500k-leaf tree
     // reproduces the failure this design exists to avoid.
     disabledBecause: tooLarge
-      ? `too large — ${total.toLocaleString()} leaves would overwhelm the browser`
+      ? `Too large — ${total.toLocaleString()} leaves would overwhelm the browser`
       : undefined,
     onSelect: tooLarge ? undefined : act.expandAll,
   });
 
   items.push({
     label: "Collapse all",
-    detail: "summarise this subtree to its shape",
+    detail: "Summarise this subtree to its shape",
     onSelect: act.collapseAll,
   });
 
   items.push({
     label: "Go back",
     separated: true,
-    detail: here.canGoBack ? `one level out of ${here.path.length}` : undefined,
-    disabledBecause: here.canGoBack ? undefined : "already at the whole tree",
+    detail: here.canGoBack ? `One level out of ${here.path.length}` : undefined,
+    disabledBecause: here.canGoBack ? undefined : "Already at the whole tree",
     onSelect: here.canGoBack ? act.back : undefined,
   });
 
   const atOriginal = !here.canGoBack && here.budget === here.autoBudget;
   items.push({
     label: "Reset to the whole tree",
-    disabledBecause: atOriginal ? "already showing it" : undefined,
+    disabledBecause: atOriginal ? "Already showing it" : undefined,
     onSelect: atOriginal ? undefined : act.reset,
   });
 

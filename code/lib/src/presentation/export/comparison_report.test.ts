@@ -118,8 +118,20 @@ describe("view setup", () => {
     // what either colour means.
     const built = section(base({ view: { gradient: true } }), "View setup");
     expect(built.swatches).toHaveLength(2);
-    expect(built.swatches![0].label).toMatch(/identical/);
-    expect(built.swatches![1].label).toMatch(/diverged/);
+    expect(built.swatches![0].label).toMatch(/Identical/);
+    expect(built.swatches![1].label).toMatch(/Diverged/);
+  });
+
+  it("names the third colour when the view had one", () => {
+    // Branches with no value at all are not on the scale, so a key listing
+    // only its two ends describes a picture the report does not contain.
+    const built = section(
+      base({ view: { gradient: true, absent: { label: "Not in the other tree", color: "#e03131" } } }),
+      "View setup",
+    );
+    expect(built.swatches).toHaveLength(3);
+    expect(built.swatches![2].label).toBe("Not in the other tree");
+    expect(built.body!.join(" ")).toMatch(/not the same as a score of zero/);
   });
 
   it("says when colour carries no meaning", () => {
