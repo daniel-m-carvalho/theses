@@ -97,6 +97,9 @@ class _Frame:
     remaining: int
     leaves: int
     kept: list[DisplayNode]
+    #: A node below here that must be drawn as itself; None once the path to it
+    #: has been left behind, so only one branch per level ever carries it.
+    keep: int | None = None
 
 
 class Summariser:
@@ -153,8 +156,25 @@ class Summariser:
             children=[],
         )
 
-    def summarise(self, root: int, budget: int) -> DisplayNode | None:
-        """Summarise the subtree at ``root`` to at most ``budget`` leaves."""
+    def summarise(
+        self, root: int, budget: int, keep: int | None = None
+    ) -> DisplayNode | None:
+        """Summarise the subtree at ``root`` to at most ``budget`` leaves.
+
+        ``keep`` names one node that must survive **unsummarised** — drawn as
+        itself, not folded into a wedge. Everything else is unchanged: the path
+        down to it is simply expanded first, and the rest of the budget is spent
+        by priority as usual.
+
+        It exists for cross-tree navigation. A leaf's counterpart is a leaf, and
+        rooting a panel there shows one dot, so the view is widened to an
+        ancestor (§27) — but on a ladder the nearest ancestor worth drawing can
+        be thousands of leaves, at which point the budget summarises the very
+        node the user asked to see. Measured on vibrio-nj -> vibrio-upgma,
+        5.89% of leaves widened past a 60-leaf ceiling and 1.42% past a
+        thousand. Without ``keep``, those jumps answer "here is roughly where it
+        lives"; with it, they answer the question that was asked.
+        """
         if not 0 <= root < self.n:
             raise IndexError(f"node {root} is outside this tree (0..{self.n - 1})")
         if budget <= 0:
@@ -163,8 +183,11 @@ class Summariser:
             return self._terminal(root, truncated=False)
         if budget == 1:
             return self._terminal(root, truncated=True)
+        # Only meaningful for something actually inside the subtree being drawn.
+        if keep is not None and not root <= keep < self.reader.subtree_end_of(root):
+            keep = None
 
-        stack = [self._frame(root, budget)]
+        stack = [self._frame(root, budget, keep)]
         completed: tuple[DisplayNode | None, int] | None = None
 
         while stack:
@@ -189,6 +212,15 @@ class Summariser:
                 # child gets at least a wedge and nothing disappears unseen.
                 siblings_left = len(frame.children) - frame.index
                 allotted = max(1, min(child_size, frame.remaining - siblings_left))
+                holds_keep = self._holds(child, frame.keep)
+                # Nothing is added to the allotment here, deliberately. Going
+                # first is the whole mechanism: `remaining` is still untouched,
+                # so `remaining - siblings_left` is at its largest and buys the
+                # expansion by itself. Topping it up beyond that spends the one
+                # unit held back for each sibling still to come — which stops
+                # the loop early, drops those siblings entirely rather than
+                # folding them into wedges, and loses their leaves. Caught by
+                # the conservation assertion, which is why that test exists.
                 if self.is_leaf(child):
                     completed = (self._terminal(child, truncated=False), 1)
                 elif allotted == 1:
@@ -197,7 +229,9 @@ class Summariser:
                     # misrepresents it as the only thing there.
                     completed = (self._terminal(child, truncated=True), 1)
                 else:
-                    stack.append(self._frame(child, allotted))
+                    stack.append(
+                        self._frame(child, allotted, frame.keep if holds_keep else None)
+                    )
                 continue
 
             stack.pop()
@@ -206,18 +240,27 @@ class Summariser:
         assert completed is not None
         return completed[0]
 
-    def _frame(self, node: int, budget: int) -> _Frame:
+    def _frame(self, node: int, budget: int, keep: int | None = None) -> _Frame:
         # Highest priority first: with a tight budget, these are the clades
         # worth the detail. Ties broken by index so the result is stable, which
         # is what lets a second request reproduce the same node set.
+        #
+        # The child holding `keep` sorts ahead of all of them. It is the one
+        # child that must not become a wedge, and going first is also what
+        # guarantees it: `remaining` is still whole, so the allotment below can
+        # afford the two units that buy an expansion rather than a tip.
         children = sorted(
             self.children_of(node),
-            key=lambda c: (-self._priority_of(c), c),
+            key=lambda c: (not self._holds(c, keep), -self._priority_of(c), c),
         )
         return _Frame(
             node=node, children=children, index=0,
-            remaining=budget, leaves=0, kept=[],
+            remaining=budget, leaves=0, kept=[], keep=keep,
         )
+
+    def _holds(self, node: int, keep: int | None) -> bool:
+        """Whether ``keep`` lies in ``node``'s subtree (interval containment)."""
+        return keep is not None and node <= keep < self.reader.subtree_end_of(node)
 
     def _finish(self, frame: _Frame) -> tuple[DisplayNode, int]:
         i = frame.node

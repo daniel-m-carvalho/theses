@@ -145,6 +145,18 @@ export function useSide(
     setPath((current) => (current.join(",") === wanted ? current : wanted ? wanted.split(",").map(Number) : []));
   }, [wanted]);
   const [budget, setBudget] = useState(autoBudget);
+  /*
+   * A node this panel was sent to from the other one, which must stay drawn
+   * rather than be folded into a wedge.
+   *
+   * Held alongside the path rather than inside it because it is not a
+   * navigation step: the panel is rooted at an ancestor, and this only says
+   * which node inside it was actually asked for. Cleared by any ordinary
+   * navigation — expanding a clade or going back is a new question, and
+   * carrying the old answer into it would keep re-expanding a branch the user
+   * has moved on from.
+   */
+  const [keep, setKeep] = useState<number | null>(null);
   // Follows the viewport until the user overrides it with expand/collapse all.
   const [overridden, setOverridden] = useState(false);
 
@@ -175,7 +187,14 @@ export function useSide(
     setError(null);
 
     api
-      .slice(treeId, { root, budget, compare, metric, signal: controller.signal })
+      .slice(treeId, {
+        root,
+        budget,
+        compare,
+        metric,
+        keep: keep ?? undefined,
+        signal: controller.signal,
+      })
       .then((fetched) => {
         if (ticket !== latest.current) return;
         const built = treeFromSlice(fetched, { labelClades });
@@ -198,15 +217,16 @@ export function useSide(
     // `labelClades` only changes a node's display name, so the slice itself is
     // unchanged — but the tree handed to the viewer must be rebuilt for the
     // new names to reach it.
-  }, [treeId, root, budget, compare, metric, nonce, labelClades]);
+  }, [treeId, root, budget, compare, metric, nonce, labelClades, keep]);
 
   const focus = useCallback(
-    (storedId: number) => {
+    (storedId: number, keepVisible: number | null = null) => {
       setPath((current) =>
         current[current.length - 1] === storedId ? current : [...current, storedId],
       );
       setOverridden(false);
       setBudget(autoBudget);
+      setKeep(keepVisible);
     },
     [autoBudget],
   );
@@ -224,15 +244,23 @@ export function useSide(
             minLeaves: JUMP_CONTEXT_LEAVES,
             maxLeaves: Math.max(JUMP_CONTEXT_LEAVES, budget),
           })
-          .then((context) => focus(context.node))
+          // The node asked about is kept drawn inside whatever it widened to.
+          // /ancestor cannot always stay under the ceiling — a tip whose only
+          // parent is enormous leaves no choice — and without this those jumps
+          // summarise the very leaf they were asked to find.
+          .then((context) => focus(context.node, storedId))
           .catch(() => focus(storedId));
       },
       [treeId, budget, focus],
     ),
 
-    back: useCallback(() => setPath((current) => current.slice(0, -1)), []),
+    back: useCallback(() => {
+      setKeep(null);
+      setPath((current) => current.slice(0, -1));
+    }, []),
 
     reset: useCallback(() => {
+      setKeep(null);
       setPath([]);
       setOverridden(false);
       setBudget(autoBudget);

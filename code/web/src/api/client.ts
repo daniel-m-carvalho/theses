@@ -83,6 +83,8 @@ export const api = {
       compare?: string;
       metric?: string;
       order?: "size" | "difference";
+      /** A node to draw as itself rather than summarise into a wedge. */
+      keep?: number;
       signal?: AbortSignal;
     } = {},
   ) => {
@@ -92,6 +94,7 @@ export const api = {
     if (options.compare) query.set("compare", options.compare);
     if (options.metric) query.set("metric", options.metric);
     if (options.order) query.set("order", options.order);
+    if (options.keep !== undefined) query.set("keep", String(options.keep));
     return request<TreeSlice>(
       `/trees/${encodeURIComponent(treeId)}/slice?${query}`,
       { signal: options.signal },

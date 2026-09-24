@@ -297,3 +297,78 @@ def test_ancestor_rejects_a_node_outside_the_tree(client):
         ).status_code
         == 404
     )
+
+
+def test_slice_keeps_a_named_node_out_of_the_wedges(client):
+    # The case /ancestor cannot avoid: a tip whose only ancestor is enormous.
+    # Widening then summarises the very node that was asked about, so the jump
+    # answers "roughly here" instead of "there it is". This is the real shape
+    # of it — a leaf, and the whole tree as its root.
+    whole = client.get(
+        "/api/v1/trees/vibrio-upgma/slice", params={"root": 0, "budget": 60}
+    ).json()
+    shallow = client.get(
+        "/api/v1/trees/vibrio-upgma/ancestor", params={"node": 3296, "min_leaves": 20}
+    ).json()
+    leaf = 3296
+    assert leaf not in whole["nodes"]["id"], "the leaf must start out hidden"
+
+    kept = client.get(
+        "/api/v1/trees/vibrio-upgma/slice",
+        params={"root": 0, "budget": 60, "keep": leaf},
+    ).json()
+    at = kept["nodes"]["id"].index(leaf)
+    assert kept["nodes"]["truncated"][at] is False
+
+    # And it is still a slice: the budget holds and no leaves are invented.
+    wedges = sum(kept["nodes"]["truncated"])
+    assert kept["displayed_leaves"] <= 60
+    assert (
+        kept["hidden_leaves"] + (kept["displayed_leaves"] - wedges)
+        == kept["total_leaves"]
+        == whole["total_leaves"]
+    )
+    # Unused here, but the jump asks for it first, so keep the two in step.
+    assert shallow["node"] <= leaf
+
+
+def test_keeping_a_very_deep_node_degrades_without_losing_leaves(client):
+    # `keep` costs one tip per sibling passed on the way down, so a node deeper
+    # than the budget cannot be reached — with 60 tips a 60-deep path spends
+    # them all on wedges before arriving. Real jumps climb one level, so this
+    # is a limit rather than a problem; what matters is that missing it stays
+    # a summary and does not quietly drop leaves.
+    whole = client.get(
+        "/api/v1/trees/vibrio-upgma/slice", params={"root": 0, "budget": 60}
+    ).json()
+    wedge = next(
+        i for i, cut in zip(whole["nodes"]["id"], whole["nodes"]["truncated"]) if cut
+    )
+    deep = wedge + 1  # first child of something already too deep to draw
+
+    kept = client.get(
+        "/api/v1/trees/vibrio-upgma/slice",
+        params={"root": 0, "budget": 60, "keep": deep},
+    ).json()
+    wedges = sum(kept["nodes"]["truncated"])
+    assert kept["displayed_leaves"] <= 60
+    assert (
+        kept["hidden_leaves"] + (kept["displayed_leaves"] - wedges)
+        == kept["total_leaves"]
+    )
+
+
+def test_slice_ignores_a_keep_outside_the_subtree(client):
+    top = client.get("/api/v1/trees/vibrio-upgma/slice", params={"budget": 20}).json()
+    wedge = next(
+        i for i, cut in zip(top["nodes"]["id"], top["nodes"]["truncated"]) if cut
+    )
+    plain = client.get(
+        "/api/v1/trees/vibrio-upgma/slice", params={"root": wedge, "budget": 20}
+    ).json()
+    # Node 0 is the whole tree's root, so it is never inside a proper subtree.
+    with_keep = client.get(
+        "/api/v1/trees/vibrio-upgma/slice",
+        params={"root": wedge, "budget": 20, "keep": 0},
+    ).json()
+    assert with_keep["nodes"] == plain["nodes"]

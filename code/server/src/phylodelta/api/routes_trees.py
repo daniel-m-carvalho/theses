@@ -152,6 +152,19 @@ def tree_slice(
     ),
     metric: str = Query("rf", description="Only meaningful with `compare`."),
     order: Order = Query("size", description=ORDER_DESCRIPTION),
+    keep: int | None = Query(
+        None,
+        ge=0,
+        description=(
+            "A node that must be drawn as itself rather than summarised into a "
+            "wedge. For arriving from `/ancestor`: the view is widened to "
+            "something readable, and this keeps the node that was asked about "
+            "visible inside it. Ignored when outside the sliced subtree. "
+            "Best-effort: reaching it spends one tip per sibling passed on the "
+            "way down, so a node deeper than `budget` stays behind a wedge — "
+            "a limit, not a failure, and leaves are conserved either way."
+        ),
+    ),
     owner: str = Depends(current_owner),
 ) -> TreeSlice:
     reader = tree_or_404(owner, tree_id)
@@ -164,7 +177,8 @@ def tree_slice(
         )
 
     pair = access_pair(owner, compare, metric) if compare is not None else None
-    node = summariser_for(reader, tree_id, order, pair, metric).summarise(root, budget)
+    summariser = summariser_for(reader, tree_id, order, pair, metric)
+    node = summariser.summarise(root, budget, keep=keep)
     if node is None:  # unreachable while budget >= 1, but do not serve a lie
         raise errors.ApiError(
             500, "empty_slice", "Summarisation produced nothing."

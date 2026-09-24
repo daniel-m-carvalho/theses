@@ -2823,6 +2823,75 @@ One bug found by the test rather than by reasoning: the `parent` column is **uns
 root's `-1` arrives as `4,294,967,295`. A `parent < 0` guard never fires and the climb walks off
 the end of the column. The bound is `0 <= parent < n_nodes`.
 
+### 27.4 `keep`: the widened view must still contain what was asked for
+
+`/ancestor` cannot always stay under its ceiling. When a tip's only parent is
+enormous the first step is unbounded (§27.2), and the widened root is then large
+enough that the slice budget summarises the target back into a wedge — the jump
+answers "roughly here" instead of "there it is". Measured over all 17,645 leaves
+of vibrio-nj -> vibrio-upgma: **5.89% widened past the 60-leaf ceiling, 1.42%
+past a thousand**, one of them to the whole tree.
+
+So `GET /trees/{id}/slice` takes **`keep`**: one node that must be drawn as
+itself. The summariser sorts the child holding it ahead of all others, so the
+path down is expanded before the budget is spent elsewhere. Nothing is added to
+its allotment — see below.
+
+**A bug this nearly shipped.** The first version also topped the keep-child's
+allotment up to 2, on the reasoning that two units are the difference between a
+wedge and an expansion. That unit comes out of the one held back for each
+sibling still to come, so the loop ran out early, dropped those siblings
+entirely rather than folding them into wedges, and **lost their leaves** — 1,127
+of 17,646 in the first test that ran. Sorting first is the whole mechanism:
+going first means `remaining` is still untouched, which is exactly when
+`remaining - siblings_left` is largest. The conservation assertion caught it,
+which is the argument for asserting conservation on every slice rather than
+trusting the allocator.
+
+`keep` is best-effort and costs one tip per sibling passed on the way down, so a
+node deeper than the budget stays behind a wedge — with 60 tips, a 60-deep path
+spends them all before arriving. Real jumps climb one level, so this is a limit
+rather than a problem, and leaves conserve either way.
+
+### 27.5 The sweep
+
+`tools/validate_navigation.py` drives the real route functions — not a
+reimplementation — over a whole pair:
+
+* **Navigation.** Expand every wedge from the root until the tree is exhausted.
+  Asserts each slice is rooted where it was asked, that its arrays agree in
+  length, that every returned node lies inside the requested interval, that
+  leaves conserve, and that the union over the whole walk is **exactly** the
+  tree's leaf set: no leaf unreachable, none drawn twice, no internal node drawn
+  as a leaf.
+* **Every leaf, both directions.** For each leaf: the counterpart is in range,
+  its **label matches**, the widened root is a true ancestor of it by interval
+  containment, the reported size matches the tree, and slicing there actually
+  **draws the target as itself**. Leaves without a counterpart are cross-checked
+  against reconciliation's dropped count.
+
+Result over all three pairs — 669 navigation slices covering 63,253 leaves, and
+**every leaf of every tree jumped in both directions**:
+
+| pair | jumps checked | mislabelled | one-dot | target not drawn |
+|---|---|---|---|---|
+| vibrio-nj ↔ vibrio-upgma | 35,290 | 0 | 0 | 0 |
+| clostridium-upgma ↔ vibrio-upgma | 34,980 | 0 | 0 | 0 |
+| clostridium-upgma ↔ vibrio-nj | 34,978 | 0 | 0 | 0 |
+
+Unmatched leaves equal reconciliation's dropped count exactly in all six
+directions (1, 156, 10,472, 10,473 …), so no leaf silently loses its
+counterpart.
+
+**One false alarm worth recording**, because it is the same trap as §27.3 and
+caught a third time: the sweep initially read `corresponds` straight from the
+store and tested `target < 0`. The column is unsigned, so "no counterpart"
+(`0xFFFFFFFF`) read as a valid node id. The API already translates it to `null`
+and the client already skips nulls, so nothing was wrong with the product — but
+an unsigned sentinel has now produced a false negative, a real bug and a broken
+test in three separate places. Anything reading these columns directly must
+translate first.
+
 ---
 
 ## References and provenance
