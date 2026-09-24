@@ -11,14 +11,27 @@
  * inferred from how many files they happened to drop.
  */
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError } from "../api/client";
-import type { ComparisonStatus } from "../api/types";
+import type { ComparisonStatus, MetricSummary } from "../api/types";
 
 type Slot = "left_tree" | "right_tree" | "left_isolates" | "right_isolates";
 
 const TREE_HINT = "Newick — .nwk, .newick, .tree";
 const TABLE_HINT = "Tab-separated typing data — .tsv";
+
+/**
+ * The opening claim of a metric's description.
+ *
+ * A manifest's description is written for someone deciding whether to
+ * implement against the metric and runs to a paragraph; this list is a choice
+ * being made in a form. The full text is in GET /metrics for anyone who wants
+ * it, and truncating here beats asking plugin authors to write twice.
+ */
+function firstSentence(text: string): string {
+  const end = text.search(/\.\s/);
+  return end === -1 ? text : text.slice(0, end + 1);
+}
 
 export function UploadPanel({ onReady }: { onReady: (comparisonId: string) => void }) {
   const [files, setFiles] = useState<Partial<Record<Slot, File>>>({});
@@ -26,6 +39,31 @@ export function UploadPanel({ onReady }: { onReady: (comparisonId: string) => vo
   const [name, setName] = useState("");
   const [leftSpecies, setLeftSpecies] = useState("");
   const [rightSpecies, setRightSpecies] = useState("");
+
+  /*
+   * What this server can compute with, asked rather than assumed.
+   *
+   * Metrics are plugins (§11), so a list in the client would be a second
+   * registry going stale the moment one is added, and `available` is a fact
+   * about the deployment — a metric whose runtime is missing is registered and
+   * cannot run. If the call fails the panel simply offers nothing and the
+   * upload proceeds on the server's default, which is the honest fallback:
+   * not being able to choose is better than choosing something absent.
+   */
+  const [metrics, setMetrics] = useState<MetricSummary[]>([]);
+  const [chosen, setChosen] = useState<string[]>([]);
+  useEffect(() => {
+    api
+      .metrics()
+      .then((found) => {
+        const usable = found.filter((metric) => metric.available);
+        setMetrics(usable);
+        setChosen((current) =>
+          current.length ? current : usable.slice(0, 1).map((metric) => metric.name),
+        );
+      })
+      .catch(() => setMetrics([]));
+  }, []);
   const [status, setStatus] = useState<ComparisonStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +90,7 @@ export function UploadPanel({ onReady }: { onReady: (comparisonId: string) => vo
     if (name.trim()) form.append("name", name.trim());
     if (leftSpecies.trim()) form.append("left_species", leftSpecies.trim());
     if (rightSpecies.trim()) form.append("right_species", rightSpecies.trim());
+    if (chosen.length) form.append("metrics", chosen.join(","));
 
     try {
       const accepted = await api.upload(form);
@@ -158,6 +197,36 @@ export function UploadPanel({ onReady }: { onReady: (comparisonId: string) => vo
           />
         </label>
       </div>
+      {metrics.length > 1 ? (
+        <fieldset className="upload-metrics">
+          <legend>Compare with</legend>
+          {metrics.map((metric) => (
+            <label key={metric.name} className="switch">
+              <input
+                type="checkbox"
+                checked={chosen.includes(metric.name)}
+                onChange={() =>
+                  setChosen((current) =>
+                    current.includes(metric.name)
+                      ? current.filter((name) => name !== metric.name)
+                      : [...current, metric.name],
+                  )
+                }
+              />
+              {metric.title}
+              <span className="switch-note">{firstSentence(metric.description)}</span>
+            </label>
+          ))}
+          <p className="field-help">
+            {/* Worth saying, because the instinct is that each one doubles the
+                wait: the reconciliation and the clade correspondence are done
+                once per pair and every metric runs against them (§9). */}
+            Several cost little more than one — the expensive part, matching
+            clades between the trees, is done once and shared.
+          </p>
+        </fieldset>
+      ) : null}
+
       <p className="field-help">
         {/* Not decoration: sequence types are numbered per species, so across
             species identical labels match no actual organism. Declaring them

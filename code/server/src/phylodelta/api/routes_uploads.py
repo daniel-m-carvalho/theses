@@ -26,6 +26,7 @@ from .. import db, retention, uploads
 from . import errors
 from .identity import current_owner
 from .routes_meta import API_PREFIX
+from ..metrics import registry as metric_registry
 from .schemas import ComparisonRemoved, ComparisonStatusResponse, UploadAccepted
 
 router = APIRouter(prefix=f"{API_PREFIX}/comparisons", tags=["comparisons"])
@@ -33,6 +34,38 @@ router = APIRouter(prefix=f"{API_PREFIX}/comparisons", tags=["comparisons"])
 
 def _isoformat(value) -> str | None:
     return value.isoformat() if value is not None else None
+
+
+#: What a bundle is computed with when the request does not say.
+DEFAULT_UPLOAD_METRICS = ["rf"]
+
+
+def _validated_metrics(raw: str | None) -> list[str]:
+    """Parse the requested metric names, or refuse with the list that exists.
+
+    Refusing by name is the whole point: a typo that silently fell back to the
+    default would produce a comparison the user did not ask for and cannot tell
+    apart from one they did, minutes later and in a different process.
+    """
+    wanted = [name.strip() for name in (raw or "").split(",") if name.strip()]
+    if not wanted:
+        return list(DEFAULT_UPLOAD_METRICS)
+
+    known = metric_registry.discover()
+    unknown = [name for name in wanted if name not in known]
+    if unknown:
+        raise errors.ApiError(
+            422,
+            "unknown_metric",
+            f"No metric named {', '.join(repr(name) for name in unknown)}.",
+            f"This server has: {', '.join(sorted(known))}.",
+        )
+    # Order preserved, duplicates dropped: asking for the same metric twice is
+    # a slip, not a request to compute it twice.
+    seen: dict[str, None] = {}
+    for name in wanted:
+        seen.setdefault(name, None)
+    return list(seen)
 
 
 @router.post(
@@ -72,14 +105,32 @@ def upload_comparison(
         ),
     ),
     right_species: str | None = Form(default=None, description="As left_species."),
+    metrics: str | None = Form(
+        default=None,
+        description=(
+            "Which comparison metrics to compute, comma-separated. Defaults to "
+            "`rf`. GET /api/v1/metrics lists what this server has and which are "
+            "available. Several cost little more than one: the reconciliation "
+            "and the clade correspondence are done once per pair and every "
+            "metric runs against them."
+        ),
+        examples=["rf", "rf,triplet"],
+    ),
 ) -> UploadAccepted:
     """Receive a bundle and record it as pending.
+
+    The metric choice is validated **first**, before any bytes are read: the
+    names are in the request, so refusing an unknown one after streaming a
+    hundred megabytes to disk would be work spent to reach an answer that was
+    available immediately.
 
     Defined with `def` rather than `async def` on purpose: reading an upload is
     blocking file I/O, and FastAPI runs a sync endpoint on a threadpool. In an
     `async def` the same reads would stall the event loop for every other
     request in the process — with 75 MB bundles, visibly.
     """
+    chosen = _validated_metrics(metrics)
+
     sources = {
         role: (upload.filename or role, upload.file)
         for role, upload in (
@@ -119,6 +170,7 @@ def upload_comparison(
             left_source=bundle.files["left_tree"].original_name,
             right_source=bundle.files["right_tree"].original_name,
             store_path=f"pairs/{bundle.comparison_id}",
+            metrics=",".join(chosen),
         )
     except Exception:
         # The bytes are on disk but nothing refers to them. Remove them rather
@@ -163,6 +215,7 @@ def comparison_status(
         id=record.id,
         status=record.status.value,
         display_name=record.display_name or record.id,
+        metrics=[m for m in (record.metrics or "").split(",") if m],
         created_at=_isoformat(record.created_at) or "",
         finished_at=_isoformat(record.finished_at),
         error=record.error,

@@ -61,6 +61,9 @@ correspondence or the jump:
   written to the symptom passed while the defect was still there.
 - **Absent data must look absent.** No fabricated mid-scale colour, no invented value. `null` from
   the API means "no counterpart", and it is drawn and keyed as its own thing.
+- **Refuse by name, not by falling back.** An unknown metric, a missing tree, a bad node: say what
+  was wrong and what exists. A silent default produces a result the user did not ask for and cannot
+  tell apart from one they did.
 - **Unsigned sentinels.** `parent` and `corresponds` are unsigned columns: "none" is `0xFFFFFFFF`,
   not `-1`. A `< 0` test never fires. This has caused a real bug, a broken test and a false negative
   in three separate places — translate before comparing.

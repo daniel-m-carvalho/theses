@@ -220,3 +220,69 @@ def test_two_owners_uploading_the_same_filename_do_not_collide(client):
     assert alice.json()["id"] != bob.json()["id"]
     assert [c.id for c in db.comparisons_for("alice")] == [alice.json()["id"]]
     assert [c.id for c in db.comparisons_for("bob")] == [bob.json()["id"]]
+
+
+def _bundle(client, **form):
+    return client.post(
+        "/api/v1/comparisons",
+        files=bundle(),
+        data={"name": "metric-choice", **form},
+        headers=as_owner("alice"),
+    )
+
+
+def test_upload_records_the_metrics_it_was_asked_for(client):
+    # On the row, not on the worker: a worker flag applies to whatever job it
+    # picks up, so two uploads made with different choices would both get
+    # whichever the running worker happened to be started with.
+    got = _bundle(client, metrics="rf")
+    assert got.status_code == 202, got.text
+    status = client.get(
+        f"/api/v1/comparisons/{got.json()['id']}/status", headers=as_owner("alice")
+    ).json()
+    assert status["metrics"] == ["rf"]
+
+
+def test_upload_defaults_to_rf_when_no_metric_is_named(client):
+    got = _bundle(client)
+    assert got.status_code == 202, got.text
+    status = client.get(
+        f"/api/v1/comparisons/{got.json()['id']}/status", headers=as_owner("alice")
+    ).json()
+    assert status["metrics"] == ["rf"]
+
+
+def test_upload_refuses_an_unknown_metric_and_says_what_exists(client):
+    # A typo that fell back to the default would produce a comparison the user
+    # did not ask for and cannot tell apart from one they did, minutes later
+    # and in another process.
+    got = _bundle(client, metrics="rf,not-a-metric")
+    assert got.status_code == 422, got.text
+    body = got.json()
+    assert "not-a-metric" in body["detail"]
+    assert "rf" in body["hint"]
+
+
+def test_upload_refuses_before_storing_anything(client, tmp_path):
+    # The names are in the request, so refusing after streaming the bundle to
+    # disk would be work spent to reach an answer that was available at once.
+    from phylodelta import uploads
+
+    def stored() -> list[str]:
+        # Not created until something is actually stored, which is the state
+        # this test wants to still be in afterwards.
+        directory = uploads.uploads_dir()
+        return sorted(p.name for p in directory.iterdir()) if directory.exists() else []
+
+    before = stored()
+    assert _bundle(client, metrics="nope").status_code == 422
+    assert stored() == before
+
+
+def test_upload_drops_a_repeated_metric_rather_than_computing_it_twice(client):
+    got = _bundle(client, metrics="rf,rf")
+    assert got.status_code == 202, got.text
+    status = client.get(
+        f"/api/v1/comparisons/{got.json()['id']}/status", headers=as_owner("alice")
+    ).json()
+    assert status["metrics"] == ["rf"]

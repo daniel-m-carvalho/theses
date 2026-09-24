@@ -493,6 +493,10 @@ class ComparisonStatusResponse(BaseModel):
         examples=["pending", "running", "ready", "failed"],
     )
     display_name: str
+    metrics: list[str] = Field(
+        default_factory=list,
+        description="The metrics this comparison was uploaded to be computed with.",
+    )
     created_at: str = Field(description="ISO 8601, UTC.")
     finished_at: str | None = Field(
         None, description="ISO 8601, UTC. Null until it succeeds or fails."

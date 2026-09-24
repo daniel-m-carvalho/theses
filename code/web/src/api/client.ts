@@ -14,6 +14,7 @@ import type {
   ComparisonStatus,
   ComparisonSummary,
   DatasetsResponse,
+  MetricSummary,
   NodeContext,
   TreeSlice,
   UploadAccepted,
@@ -56,6 +57,15 @@ export const api = {
   me: () => request<WhoAmI>("/me"),
 
   datasets: () => request<DatasetsResponse>("/datasets"),
+
+  /**
+   * What this server can compute a comparison with.
+   *
+   * Asked rather than hardcoded: metrics are plugins, so a list in the client
+   * would be a second registry that goes stale the moment one is added — and
+   * `available` is a fact about the deployment, not about the code.
+   */
+  metrics: () => request<MetricSummary[]>("/metrics"),
 
   comparison: (pairId: string, metric = "rf") =>
     request<ComparisonSummary>(

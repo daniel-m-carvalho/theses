@@ -154,11 +154,16 @@ check("a non-numeric budget is a 422", status == 422, f"got {status}")
 # --- 5. Uploading, the way the panel does ----------------------------------
 
 print("\n== uploading")
-newick_a = b"((a:0.1,b:0.1):0.2,(c:0.1,d:0.1):0.2,(e:0.1,f:0.1):0.2);"
-newick_b = b"((a:0.1,c:0.1):0.2,(b:0.1,d:0.1):0.2,(e:0.1,f:0.1):0.2);"
+newick_a = b"(((a:0.1,b:0.1):0.2,(c:0.1,d:0.1):0.2):0.1,(e:0.1,f:0.1):0.3);"
+newick_b = b"(((a:0.1,c:0.1):0.2,(b:0.1,d:0.1):0.2):0.1,(e:0.1,f:0.1):0.3);"
 body, headers = multipart(
     {"left_tree": ("a.nwk", newick_a), "right_tree": ("b.nwk", newick_b)},
-    {"name": f"sim-{uuid.uuid4().hex[:8]}", "left_species": "sim", "right_species": "sim"},
+    {
+        "name": f"sim-{uuid.uuid4().hex[:8]}",
+        "left_species": "sim",
+        "right_species": "sim",
+        "metrics": "rf",
+    },
 )
 status, accepted = call("/comparisons", method="POST", data=body, headers=headers)
 check("an upload is accepted with 202", status == 202, f"got {status}: {accepted}")
@@ -173,20 +178,51 @@ if uploaded_id:
         if state in {"ready", "failed"}:
             break
         time.sleep(1)
-    check("the upload reaches a terminal state", state in {"ready", "failed"}, str(state))
+    # "Terminal" alone was too weak: a bundle the server rejects is terminal
+    # too, and the first version of this passed while the trees it sent had a
+    # trifurcating root the ingest refuses. A good upload must reach *ready*.
+    _, record = call(f"/comparisons/{uploaded_id}/status")
+    check("a good upload reaches ready", state == "ready", f"{state}: {record.get('error')}")
     if state == "ready":
         status, built = call(f"/comparisons/{uploaded_id}")
         check("the built comparison is readable", status == 200, f"got {status}")
         status, sliced = call(f"/trees/{built['left']}/slice?compare={uploaded_id}&budget=10")
         check("and its trees slice", status == 200, f"got {status}")
         check("6 leaves survived the round trip", sliced["total_leaves"] == 6, str(sliced.get("total_leaves")))
-    else:
         _, record = call(f"/comparisons/{uploaded_id}/status")
+        check("the metric choice is recorded", record["metrics"] == ["rf"], str(record.get("metrics")))
+        status, _ = call(f"/comparisons/{uploaded_id}?metric=triplet")
+        check("a metric that was not chosen is not served", status == 404, f"got {status}")
+
+    else:
         check("a failed upload says why", bool(record.get("error")), str(record))
+
+print("\n== choosing metrics")
+status, listed = call("/metrics")
+check("the server lists its metrics", status == 200 and listed, "")
+names = [m["name"] for m in listed]
+body, headers = multipart(
+    {"left_tree": ("a.nwk", newick_a), "right_tree": ("b.nwk", newick_b)},
+    {"name": "bad-metric", "metrics": "rf,not-a-metric"},
+)
+status, refused = call("/comparisons", method="POST", data=body, headers=headers)
+check("an unknown metric is refused", status == 422, f"got {status}")
+check(
+    "and the refusal names what exists",
+    status == 422 and all(n in str(refused.get("hint", "")) for n in names),
+    str(refused),
+)
 
 print("\n== rejecting bad uploads")
 bad = [
-    ({"left_tree": ("a.nwk", b"not newick at all")}, "only one tree"),
+    ({"left_tree": ("a.nwk", newick_a)}, "only one tree"),
+    (
+        {
+            "left_tree": ("a.nwk", b"((a:0.1,b:0.1),(c:0.1,d:0.1),(e:0.1,f:0.1));"),
+            "right_tree": ("b.nwk", newick_b),
+        },
+        "a tree that is not rooted binary",
+    ),
     (
         {"left_tree": ("a.nwk", b"not newick"), "right_tree": ("b.nwk", newick_b)},
         "unparseable newick",

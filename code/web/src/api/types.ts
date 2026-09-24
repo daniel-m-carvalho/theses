@@ -178,3 +178,15 @@ export interface NodeContext {
   /** The climb hit the root without meeting `min_leaves`. */
   reached_root: boolean;
 }
+
+/** A comparison metric this server can compute, from GET /metrics. */
+export interface MetricSummary {
+  name: string;
+  title: string;
+  description: string;
+  kind: string;
+  /** False when the plugin is registered but its runtime is missing. */
+  available: boolean;
+  version: string;
+  capabilities: Record<string, unknown>;
+}

@@ -127,6 +127,15 @@ class Comparison(Base):
     )
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    #: Which metrics to compute, comma-separated, chosen at upload.
+    #:
+    #: On the row rather than on the worker, which is where it used to be: a
+    #: worker flag applies to whatever job it happens to pick up, so two
+    #: comparisons uploaded with different choices would get whichever the
+    #: running worker was started with. The request is what knows what was
+    #: asked for, and a retry in a month has to reach the same answer.
+    metrics: Mapped[str] = mapped_column(String(255), default="rf")
+
     store_path: Mapped[str] = mapped_column(String(512), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     finished_at: Mapped[datetime | None] = mapped_column(

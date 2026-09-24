@@ -67,6 +67,11 @@ def _heartbeat(comparison_id: str, worker: str):
         thread.join(timeout=5)
 
 
+def _requested(record) -> list[str]:
+    """The metrics this comparison was uploaded with, if any were named."""
+    return [name.strip() for name in (record.metrics or "").split(",") if name.strip()]
+
+
 def run_comparison(comparison_id: str, metrics: list[str] | None = None) -> tuple[str, str]:
     """Do the work for one claimed comparison. Raises on failure.
 
@@ -124,7 +129,10 @@ def run_comparison(comparison_id: str, metrics: list[str] | None = None) -> tupl
         )
 
     # --- the comparison -------------------------------------------------
-    wanted = list(metrics or DEFAULT_METRICS)
+    # The row first: the comparison was uploaded asking for these, and a worker
+    # started with a different flag must not silently compute something else.
+    # An explicit argument still wins, which is what lets a rebuild ask for one.
+    wanted = list(metrics or _requested(record) or DEFAULT_METRICS)
     manifests, loaded = load_metrics(wanted)
     computed = compute_pair(
         store, record.left_id, record.right_id, wanted, manifests=manifests, loaded=loaded

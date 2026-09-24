@@ -92,6 +92,7 @@ def record_upload(
     left_source: str,
     right_source: str,
     store_path: str,
+    metrics: str = "rf",
 ) -> None:
     """Record an accepted bundle: two pending trees and a pending comparison.
 
@@ -130,6 +131,7 @@ def record_upload(
                 display_name=display_name,
                 status=ComparisonStatus.PENDING,
                 store_path=store_path,
+                metrics=metrics,
             )
         )
 

@@ -3155,6 +3155,64 @@ clearly, which is what the second tool measures.
 
 ---
 
+## 30. The metric is the uploader's choice, and it lives on the row
+
+Asked for (2026-09-24) after the frontend shipped: the upload had no say in which metric was
+computed, so every comparison got `rf`.
+
+### 30.1 The pipeline already supported it; nothing exposed it
+
+`build_pair` and `run_comparison` have always taken a list, and §9 had already established why
+several are cheap: **the reconciliation and the clade correspondence are done once per pair and
+every metric runs against them**, so a second metric costs only its own work rather than another
+best-match search. What was missing was a way for the request to say so.
+
+### 30.2 On the comparison row, not on the worker
+
+`run_comparison` took its metrics from a **worker** argument, which the CLI supplied. That is the
+wrong place, and quietly so: a worker flag applies to whatever job the worker happens to claim, so
+two comparisons uploaded with different choices both get whichever flag the running worker was
+started with — and which one you get depends on which process picks you up.
+
+The request is what knows what was asked for, so `Comparison.metrics` holds it (comma-separated,
+defaulting to `rf`), and the worker prefers the row over its own default. An explicit argument still
+wins, which is what lets a rebuild ask for something specific.
+
+### 30.3 Refuse by name, before reading a byte
+
+An unknown metric is a **422 naming what the server does have**, not a silent fall back to the
+default. A typo that fell back would produce a comparison the user did not ask for and cannot tell
+apart from one they did — minutes later, in another process.
+
+It is validated before the bundle is read. The names are in the request, so refusing after streaming
+seventy-five megabytes to disk would be work spent to reach an answer that was available at once.
+Duplicates are dropped rather than computed twice: asking for the same metric twice is a slip.
+
+### 30.4 The client asks what exists
+
+The panel reads `GET /api/v1/metrics` rather than carrying a list. Metrics are plugins (§11), so a
+hardcoded list is a second registry that goes stale the moment one is added — and `available` is a
+fact about the *deployment*: a metric can be registered and have no runtime. Only available ones are
+offered, and the chooser appears only when there is more than one. If the call fails the panel
+offers nothing and the upload proceeds on the server's default, which is the honest fallback — not
+being able to choose beats choosing something absent.
+
+Manifest descriptions are written for someone implementing against the metric and run to a
+paragraph, so the form shows the first sentence and leaves the rest to the endpoint.
+
+### 30.5 What this exposed in the simulation
+
+`tools/simulate_usage.py` checked that an upload "reaches a terminal state". It passed — while the
+trees it was sending had a **trifurcating root**, which the ingest refuses (`assert_rooted_binary`).
+Failure is terminal too. The check now requires *ready* and reports the error when it is not, and a
+non-binary tree is one of the bad-upload cases rather than the accidental content of the good one.
+
+The same weak-assertion mistake as §27.2's `leaves > 1`: an assertion has to encode the promise, not
+the last thing that went wrong.
+
+
+---
+
 ## References and provenance
 
 Where every algorithm and every implementation came from. Bibliographic details are taken from the
