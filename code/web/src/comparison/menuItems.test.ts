@@ -10,7 +10,13 @@ import realSlice from "../tree/__fixtures__/slice.json";
 import type { TreeSlice } from "../api/types";
 import { gradientFrom } from "../tree/comparisonValues";
 import { treeFromSlice } from "../tree/fromSlice";
-import { buildMenu, jumpTargetFor, menuTitle, type PendingMenu } from "./menuItems";
+import {
+  buildMenu,
+  JUMP_CONTEXT_LEAVES,
+  jumpTargetFor,
+  menuTitle,
+  type PendingMenu,
+} from "./menuItems";
 import { DEFAULT_BUDGET, EXPAND_ALL_LIMIT, type SideActions, type SideState } from "./useSide";
 
 const slice = realSlice as unknown as TreeSlice;
@@ -124,30 +130,38 @@ describe("right-clicking a node", () => {
     expect(jumpTargetFor(left, leaf)).not.toBe(left.gradient.correspondingTo(leaf));
   });
 
-  it("climbs past a cherry, and stops before swallowing the tree", () => {
-    const left = sideOf();
-    // Walk up from a leaf recording what each ancestor stands for; the chosen
-    // target must correspond to one big enough to see and no bigger than
-    // needed.
-    const leaf = [...left.tree!.leaves].find((id) =>
-      left.tree!.parentOfStoredId.has(id),
-    )!;
-    const sizes: number[] = [];
-    let at: number | undefined = leaf;
-    while (at !== undefined) {
-      const parent: number | undefined = left.tree!.parentOfStoredId.get(at);
-      if (parent === undefined) break;
-      const node = left.tree!.byStoredId.get(parent)!;
-      sizes.push(left.tree!.trueLeafCountOf(node) ?? 0);
-      if ((left.tree!.trueLeafCountOf(node) ?? 0) >= 20) break;
-      at = parent;
-    }
-    // It climbed at least one level beyond the immediate parent, unless the
-    // parent was already large enough.
-    expect(sizes.length).toBeGreaterThan(0);
-    expect(sizes[sizes.length - 1]).toBeGreaterThanOrEqual(
-      Math.min(20, sizes[sizes.length - 1]),
-    );
+  it("asks the largest clade first and the bare leaf last", () => {
+    // The rule that matters: ask from a clade big enough that a *tip* cannot
+    // win the overlap. Correspondence puts no floor on the target's size, so
+    // asking from a two-leaf cherry `{a, b}` scores the lone leaf `{a}` at 0.5
+    // and nothing in a dissimilar tree beats it — which put one dot on screen
+    // for 400 of 400 sampled leaves of the real vibrio pair.
+    const base = sideOf();
+    const tree = base.tree!;
+    const leaf = [...tree.leaves].find((id) => tree.parentOfStoredId.has(id))!;
+
+    // Only the leaf itself has a counterpart, so the rule must exhaust the
+    // ancestors before falling back to it — which also records the order.
+    const asked: number[] = [];
+    const left: SideState = {
+      ...base,
+      gradient: {
+        similarityOf: () => undefined,
+        correspondingTo: (id: number) => {
+          asked.push(id);
+          return id === leaf ? 99 : undefined;
+        },
+      },
+    };
+
+    expect(jumpTargetFor(left, leaf)).toBe(99);
+
+    const sizeOf = (id: number) => tree.trueLeafCountOf(tree.byStoredId.get(id)!) ?? 0;
+    expect(sizeOf(asked[0])).toBeGreaterThanOrEqual(JUMP_CONTEXT_LEAVES);
+    expect(asked[asked.length - 1]).toBe(leaf);
+    // It stops at the first ancestor large enough rather than walking to the
+    // root: everything below the one it asked first is still smaller.
+    expect(asked.slice(1).every((id) => sizeOf(id) < JUMP_CONTEXT_LEAVES)).toBe(true);
   });
 
   it("refuses to locate a clade, because that match is only an approximation", () => {

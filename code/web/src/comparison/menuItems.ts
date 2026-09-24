@@ -46,24 +46,61 @@ export function menuTitle(menu: PendingMenu, states: [SideState, SideState]): st
 }
 
 /**
+ * How much of the other tree a jump should land in.
+ *
+ * Not a display preference — it is what stops the jump resolving to a tip.
+ * Correspondence picks the node with the highest Jaccard overlap and puts no
+ * floor on its size, so a 2-leaf clade `{a, b}` matches the bare leaf `{a}` at
+ * 0.5, and nothing in a dissimilar tree beats that. Asking from a clade of
+ * this many leaves caps a single-leaf match at 1/20, which no real counterpart
+ * loses to.
+ */
+export const JUMP_CONTEXT_LEAVES = 20;
+
+/**
  * Where to send the other panel when a leaf is located in it.
  *
  * Its **enclosing clade**, not the leaf itself. Rooting a panel at a single
  * leaf is technically what was asked for and useless in practice: the panel
  * became one dot, with every bit of the context you were comparing against
- * gone. Rooting at the corresponding node of the leaf's parent shows the leaf
- * among its neighbours, which is what "find it in the other tree" means to
- * someone looking at two trees.
+ * gone.
+ *
+ * Asking from the leaf's immediate parent was not enough. The target is chosen
+ * by overlap, and overlap with a two-leaf clade is maximised by a *tip* as
+ * often as by a clade — measured on clostridium vs vibrio, leaf `15462`'s
+ * parent `{11633, 15462}` corresponded to the lone leaf `15462`, and the panel
+ * became one dot again. So climb the source side first: Jaccard divides by the
+ * union, so the larger the clade asking, the worse a tip scores, and by
+ * {@link JUMP_CONTEXT_LEAVES} it cannot win.
+ *
+ * The climb happens **here**, not in the other tree, because the other tree is
+ * only present as its current slice — an arbitrary node's ancestors are not
+ * known on this side. The ancestors of a displayed leaf are.
+ *
+ * Returns the match of the largest clade that has one, so a jump gives as much
+ * context as the data allows and still answers when only the tip corresponds.
  */
 export function jumpTargetFor(side: SideState, leafStoredId: number): number | undefined {
-  const parent = side.tree?.parentOfStoredId.get(leafStoredId);
-  if (parent !== undefined) {
-    const clade = side.gradient.correspondingTo(parent);
-    if (clade !== undefined) return clade;
+  const tree = side.tree;
+  if (!tree) return undefined;
+
+  // The leaf and its ancestors, innermost first, up to the first one large
+  // enough — or to the slice root, whichever comes first.
+  const chain: number[] = [leafStoredId];
+  let at: number | undefined = leafStoredId;
+  while (at !== undefined) {
+    const node = tree.byStoredId.get(at);
+    if (node && (tree.trueLeafCountOf(node) ?? 1) >= JUMP_CONTEXT_LEAVES) break;
+    at = tree.parentOfStoredId.get(at);
+    if (at !== undefined) chain.push(at);
   }
-  // No parent in this slice, or the parent has no counterpart: fall back to
-  // the leaf's own match rather than offering nothing.
-  return side.gradient.correspondingTo(leafStoredId);
+
+  // Outermost first: the widest view the correspondence can actually support.
+  for (let i = chain.length - 1; i >= 0; i -= 1) {
+    const partner = side.gradient.correspondingTo(chain[i]);
+    if (partner !== undefined) return partner;
+  }
+  return undefined;
 }
 
 export function buildMenu(
