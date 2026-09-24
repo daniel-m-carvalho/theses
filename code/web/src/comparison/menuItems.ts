@@ -121,35 +121,34 @@ export function buildMenu(
     });
   }
 
-  // Expanding or collapsing *everything* acts on the view, not on a node, so
-  // it belongs only to the menu opened away from one. Offering it under a
-  // clade invited reading it as "expand all of this clade", which is what the
-  // first item already does — and does correctly, for that clade alone.
-  if (menu.storedId === undefined) {
-    const total = here.slice?.total_leaves ?? 0;
-    const tooLarge = total > EXPAND_ALL_LIMIT;
-    items.push({
-      label: "Expand all",
-      detail: total && !tooLarge ? `${total.toLocaleString()} leaves` : undefined,
-      // Not a limit of the server — it answers fine — but of the browser,
-      // which is the thing being measured. Asking for every leaf of a
-      // 500k-leaf tree reproduces the failure this design exists to avoid.
-      disabledBecause: tooLarge
-        ? `too large — ${total.toLocaleString()} leaves would overwhelm the browser`
-        : undefined,
-      onSelect: tooLarge ? undefined : act.expandAll,
-    });
+  // Everything below acts on the view rather than on a node, so a menu opened
+  // on a clade or a leaf offers none of it: that menu is about the thing under
+  // the cursor, and nothing else.
+  if (menu.storedId !== undefined) return items;
 
-    items.push({
-      label: "Collapse all",
-      detail: "summarise this subtree to its shape",
-      onSelect: act.collapseAll,
-    });
-  }
+  const total = here.slice?.total_leaves ?? 0;
+  const tooLarge = total > EXPAND_ALL_LIMIT;
+  items.push({
+    label: "Expand all",
+    detail: total && !tooLarge ? `${total.toLocaleString()} leaves` : undefined,
+    // Not a limit of the server — it answers fine — but of the browser, which
+    // is the thing being measured. Asking for every leaf of a 500k-leaf tree
+    // reproduces the failure this design exists to avoid.
+    disabledBecause: tooLarge
+      ? `too large — ${total.toLocaleString()} leaves would overwhelm the browser`
+      : undefined,
+    onSelect: tooLarge ? undefined : act.expandAll,
+  });
+
+  items.push({
+    label: "Collapse all",
+    detail: "summarise this subtree to its shape",
+    onSelect: act.collapseAll,
+  });
 
   items.push({
     label: "Go back",
-    separated: items.length > 0,
+    separated: true,
     detail: here.canGoBack ? `one level out of ${here.path.length}` : undefined,
     disabledBecause: here.canGoBack ? undefined : "already at the whole tree",
     onSelect: here.canGoBack ? act.back : undefined,

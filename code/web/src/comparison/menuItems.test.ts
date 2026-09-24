@@ -142,10 +142,10 @@ describe("right-clicking a node", () => {
     expect(jump.onSelect).toBeUndefined();
   });
 
-  it("offers no whole-view actions, because those act on the view", () => {
-    // "Expand all" under a clade invites reading it as "expand all of this
+  it("offers only actions on that clade", () => {
+    // "Expand all" under a clade invited reading it as "expand all of this
     // clade" — which is what the first item already does, and does correctly
-    // for that clade alone.
+    // for that clade alone. Navigation went with it: the view menu owns it.
     const left = sideOf();
     const labels = buildMenu(
       { side: 0, at, storedId: aWedge(left) },
@@ -153,11 +153,8 @@ describe("right-clicking a node", () => {
       [actions(), actions()],
     ).map((item) => item.label);
 
-    expect(labels).not.toContain("Expand all");
-    expect(labels).not.toContain("Collapse all");
-    // Navigation stays: going back is as meaningful here as anywhere.
-    expect(labels).toContain("Go back");
-    expect(labels).toContain("Expand this clade");
+    // A menu opened on a clade is about that clade and nothing else.
+    expect(labels).toEqual(["Expand this clade", "Find this leaf in the other tree"]);
   });
 
   it("titles the menu with the clade and its size", () => {

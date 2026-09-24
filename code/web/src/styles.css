@@ -323,34 +323,63 @@ body {
   flex-wrap: wrap;
 }
 .legend-label { font-size: 12px; color: var(--muted); flex: 0 0 auto; }
-.legend-keys { display: flex; flex-wrap: wrap; gap: 4px 6px; }
-.legend-keys .key {
+.column-picker { position: relative; display: flex; align-items: center; gap: 6px; }
+.picker-button {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 2px 8px;
+  gap: 8px;
+  min-width: 140px;
+  justify-content: space-between;
+  padding: 3px 8px;
   border: 1px solid var(--line);
-  border-radius: 999px;
-  font-size: 12px;
-  color: var(--muted);
-  cursor: pointer;
-  user-select: none;
-}
-.legend-keys .key.on {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
-}
-.legend-keys .key input { margin: 0; }
-
-.legend-warning {
-  margin: 0 0 6px;
-  font-size: 12px;
-  color: var(--warn);
-  background: var(--warn-bg);
-  padding: 5px 9px;
   border-radius: 6px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
 }
+.picker-button:hover { border-color: var(--accent); }
+
+.picker-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  min-width: 200px;
+  max-height: 260px;
+  overflow: auto;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 2px;
+}
+.picker-menu label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 7px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.picker-menu label:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.picker-menu input { margin: 0; }
+
+.legend-scale { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.legend-scale select {
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+}
+
 .legend-note { font-size: 12px; color: var(--muted); }
 .legend-note.error { color: var(--danger); }
 

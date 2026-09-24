@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   createComparison,
+  type BarScale,
   type ComparisonHandle,
   type Config,
 } from "phylo-tree-viewer";
@@ -164,6 +165,7 @@ export function ComparisonView({
   // Which typing columns to show. Several at once is allowed; see
   // `useTypingData` for what that does to a bar's length.
   const [segmentKeys, setSegmentKeys] = useState<string[]>([]);
+  const [barScale, setBarScale] = useState<BarScale>("log");
   const leftTyping = useTypingData(isolateSets[0], left.tree, showTyping, segmentKeys);
   const rightTyping = useTypingData(isolateSets[1], right.tree, showTyping, segmentKeys);
 
@@ -366,6 +368,7 @@ export function ComparisonView({
         if (datum) data.set(leaf, datum);
       }
       bars.setData(data);
+      bars.setScale(barScale);
       bars.setEnabled(showTyping);
     });
     // Built from the categories **currently** shown, not from every assignment
@@ -383,7 +386,7 @@ export function ComparisonView({
         ? current
         : next,
     );
-  }, [showTyping, leftTyping, rightTyping]);
+  }, [showTyping, leftTyping, rightTyping, barScale]);
 
   // Re-measure on resize, so the detail tracks the window rather than a
   // constant chosen for whatever window it was written on.
@@ -432,7 +435,8 @@ export function ComparisonView({
           segmentKeys={segmentKeys}
           keys={offered}
           onSegmentKeys={setSegmentKeys}
-          inflation={Math.max(leftTyping.inflation, rightTyping.inflation)}
+          scale={barScale}
+          onScale={setBarScale}
           loading={leftTyping.loading || rightTyping.loading}
           error={leftTyping.error ?? rightTyping.error}
         />

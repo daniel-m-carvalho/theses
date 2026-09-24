@@ -7,13 +7,14 @@
  * bargain the tree slicing already makes, applied to the metadata.
  *
  * **More than one column can be shown at once**, and the segments are merged
- * into one bar (user's choice, 2026-09-24). That has a consequence worth being
- * explicit about rather than hiding: the backend segments by one column per
- * request, and every isolate appears in every column, so an isolate is counted
- * once *per selected column*. Two columns make a leaf's bar twice as long as
- * its isolate count. Bar lengths therefore stay comparable **between leaves**
- * but no longer read as "how many isolates"; `inflation` carries the factor so
- * the legend and tooltips can say so.
+ * into one bar (user's choice, 2026-09-24). One consequence, recorded here
+ * because it is not visible from the screen: the backend segments by a single
+ * column per request and every isolate appears in every column, so an isolate
+ * is counted once *per selected column*. Showing two columns makes a bar twice
+ * as long as the leaf's isolate count. Lengths stay comparable **between
+ * leaves** — every leaf is inflated by the same factor — but they do not read
+ * as "how many isolates". The user asked for the on-screen note about this to
+ * be removed; the behaviour is deliberate, not a defect.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -33,8 +34,6 @@ export interface TypingData {
   segmentKeys: string[];
   /** Every column that can segment. */
   keys: string[];
-  /** How many times each isolate is counted — one per selected column. */
-  inflation: number;
   loading: boolean;
   error: string | null;
 }
@@ -44,7 +43,6 @@ const EMPTY: TypingData = {
   categories: [],
   segmentKeys: [],
   keys: [],
-  inflation: 1,
   loading: false,
   error: null,
 };
@@ -202,7 +200,6 @@ export function useTypingData(
             categories,
             segmentKeys,
             keys,
-            inflation: Math.max(1, segmentKeys.length),
             loading,
             error,
           }
