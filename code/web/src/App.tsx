@@ -10,6 +10,7 @@ import { api, ApiError } from "./api/client";
 import { ComparisonView } from "./comparison/ComparisonView";
 import { UploadPanel } from "./upload/UploadPanel";
 import { CheckboxMenu } from "./ui/CheckboxMenu";
+import { Notice } from "./ui/Notice";
 import { useUrlState, type ViewOptions } from "./useUrlState";
 import { COLOR_TARGETS } from "./comparison/colorTarget";
 import type {
@@ -24,6 +25,9 @@ export function App() {
   const [pairs, setPairs] = useState<PairSummary[]>([]);
   const [datasets, setDatasets] = useState<DatasetsResponse | null>(null);
   const [exporting, setExporting] = useState(false);
+  /** The comparison a removal was asked about, until it is confirmed or not. */
+  const [removing, setRemoving] = useState<PairSummary | null>(null);
+  const [removeBusy, setRemoveBusy] = useState(false);
   const [view, setView] = useUrlState();
 
   /*
@@ -62,6 +66,29 @@ export function App() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  const remove = useCallback(
+    async (pair: PairSummary) => {
+      setRemoveBusy(true);
+      try {
+        await api.removeComparison(pair.id);
+        // Leave the comparison if it is the one being looked at; its slices
+        // would 404 from the next navigation onwards.
+        if (chosen?.id === pair.id) {
+          setChosen(null);
+          setView({ comparison: null, left: [], right: [] });
+        }
+        setRemoving(null);
+        await refresh();
+      } catch (failed) {
+        setError(failed instanceof ApiError ? failed.message : String(failed));
+        setRemoving(null);
+      } finally {
+        setRemoveBusy(false);
+      }
+    },
+    [chosen, refresh, setView],
+  );
 
   // Restore from the URL once the listing arrives. A refresh on a comparison
   // must come back to that comparison, not to the chooser: getting back to a
@@ -181,6 +208,19 @@ export function App() {
 
       {error ? <p className="app-error">{error}</p> : null}
 
+      {removing ? (
+        <Notice
+          title={`Remove ${removing.left} vs ${removing.right}?`}
+          detail={
+            "This deletes the comparison, both trees, and any typing data only it " +
+            "was using. Trees another comparison still needs are kept. It cannot be undone."
+          }
+          confirm={{ label: "Remove", onConfirm: () => void remove(removing) }}
+          busy={removeBusy}
+          onDismiss={() => setRemoving(null)}
+        />
+      ) : null}
+
       {chosen ? (
         <>
           {chosen.caution ? <p className="caution">{chosen.caution}</p> : null}
@@ -211,6 +251,12 @@ export function App() {
               <ul className="pair-list">
                 {pairs.map((pair) => (
                   <li key={pair.id}>
+                    {/*
+                      The remove control is a SIBLING of the row, not inside
+                      it: a button within a button is invalid markup, and the
+                      browser's own repair of it puts the destructive action
+                      where a click meant to open the comparison can land.
+                    */}
                     <button
                       type="button"
                       className="pair"
@@ -230,6 +276,15 @@ export function App() {
                           {pair.metrics.join(", ") || "no metrics"}
                         </span>
                       ) : null}
+                    </button>
+                    <button
+                      type="button"
+                      className="pair-remove"
+                      title={`Remove ${pair.left} vs ${pair.right}`}
+                      aria-label={`Remove ${pair.left} vs ${pair.right}`}
+                      onClick={() => setRemoving(pair)}
+                    >
+                      ×
                     </button>
                   </li>
                 ))}

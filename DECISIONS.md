@@ -3213,6 +3213,46 @@ the last thing that went wrong.
 
 ---
 
+## 31. Removing a comparison, from the list
+
+The `DELETE` endpoint has existed since §26; nothing in the frontend reached it, so the only way to
+remove anything was curl. Added (2026-09-25) for the demo deployment, where other people will be
+uploading.
+
+**A sibling control, not a nested one.** The row is already a button. A remove button *inside* it
+would be invalid markup, and the browser's own repair of that puts a destructive action where a
+click meant to open the comparison can land. It sits beside the row instead, at 45% opacity until
+the row is hovered or it is focused — a list of red buttons competing with the rows would be the
+loudest thing on the page, and this is the rarest action on it.
+
+**The confirmation is the same `Notice` the failed jump uses** (§27.4c), given an optional `confirm`
+action rather than a second component: a separate confirm dialog is the same markup with one more
+button, and two of them drift. Cancel comes first and takes focus, and **both Escape and the
+backdrop dismiss** — the fastest way out of the dialog must not be the irreversible one. Both
+buttons disable while the request is in flight, since a second click would be a second `DELETE`
+against a row the first one has already made a 404.
+
+**What it removes** is stated before it happens: the comparison, both trees, and any typing data
+only it was using. Trees another comparison still references are kept — verified on the running
+service, where deleting an uploaded pair took its two trees with it and left the three catalogue
+pairs and their three trees untouched.
+
+### 31.1 The catalogue pairs are deletable too
+
+There is no marker distinguishing a pair the offline sweep built from one someone uploaded — §19
+made that deliberate, so that "a comparison exists" means one thing and the listing does not have to
+union the database with a directory scan. The consequence is that the demo's own exhibits can be
+removed by anyone using it, and under mock auth (§25) *everyone is the same user*, so one visitor
+can delete what another came to see.
+
+Left as it is for now, with the owner informed: restoring them is `phylodelta build-all --if-empty`,
+and a guard would be either a `seeded` column or a refusal keyed on id — both of which reintroduce
+the two-kinds-of-comparison distinction that §19 removed on purpose. Worth doing only if it actually
+happens.
+
+
+---
+
 ## References and provenance
 
 Where every algorithm and every implementation came from. Bibliographic details are taken from the

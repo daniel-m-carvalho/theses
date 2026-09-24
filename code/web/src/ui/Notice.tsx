@@ -14,10 +14,22 @@ import { useEffect, useRef } from "react";
 export function Notice({
   title,
   detail,
+  confirm,
+  busy = false,
   onDismiss,
 }: {
   title: string;
   detail?: string | null;
+  /**
+   * Turns this into a question rather than a statement.
+   *
+   * Same box on purpose: a separate confirm dialog would be the same markup
+   * with a second button, and two of them drift. The cancel path stays the
+   * default action — Escape and the backdrop both dismiss, so the destructive
+   * one is never what a stray keypress reaches.
+   */
+  confirm?: { label: string; onConfirm: () => void };
+  busy?: boolean;
   onDismiss: () => void;
 }) {
   const close = useRef<HTMLButtonElement>(null);
@@ -40,9 +52,27 @@ export function Notice({
       >
         <p className="notice-title">{title}</p>
         {detail ? <p className="notice-detail">{detail}</p> : null}
-        <button type="button" ref={close} className="back-button" onClick={onDismiss}>
-          OK
-        </button>
+        <div className="notice-actions">
+          <button
+            type="button"
+            ref={close}
+            className="back-button"
+            onClick={onDismiss}
+            disabled={busy}
+          >
+            {confirm ? "Cancel" : "OK"}
+          </button>
+          {confirm ? (
+            <button
+              type="button"
+              className="primary danger"
+              onClick={confirm.onConfirm}
+              disabled={busy}
+            >
+              {busy ? "Removing…" : confirm.label}
+            </button>
+          ) : null}
+        </div>
       </div>
     </div>
   );

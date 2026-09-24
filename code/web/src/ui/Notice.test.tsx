@@ -43,6 +43,55 @@ describe("Notice", () => {
     }
   });
 
+  it("asks rather than tells when given a confirm action", () => {
+    const onConfirm = vi.fn();
+    const host = render(
+      <Notice
+        title="Remove a vs b?"
+        confirm={{ label: "Remove", onConfirm }}
+        onDismiss={() => {}}
+      />,
+    );
+    const labels = [...host.querySelectorAll("button")].map((b) => b.textContent);
+    // Cancel first and focused: the destructive one must not be what a stray
+    // Return key reaches.
+    expect(labels).toEqual(["Cancel", "Remove"]);
+    expect(document.activeElement?.textContent).toBe("Cancel");
+
+    host.querySelectorAll("button")[1].click();
+    expect(onConfirm).toHaveBeenCalled();
+  });
+
+  it("keeps Escape and the backdrop on the safe path when confirming", () => {
+    // Both dismiss, neither confirms — otherwise the fastest way out of the
+    // dialog would be the irreversible one.
+    const onConfirm = vi.fn();
+    const onDismiss = vi.fn();
+    const host = render(
+      <Notice title="Remove?" confirm={{ label: "Remove", onConfirm }} onDismiss={onDismiss} />,
+    );
+    act(() => host.querySelector<HTMLElement>(".notice-backdrop")!.click());
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    });
+    expect(onDismiss).toHaveBeenCalledTimes(2);
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it("disables both actions while the work is running", () => {
+    // A second click on Remove would be a second DELETE, and the first has
+    // already made the row a 404.
+    const host = render(
+      <Notice
+        title="Remove?"
+        confirm={{ label: "Remove", onConfirm: () => {} }}
+        busy
+        onDismiss={() => {}}
+      />,
+    );
+    expect([...host.querySelectorAll("button")].every((b) => b.disabled)).toBe(true);
+  });
+
   it("does not dismiss when the message itself is clicked", () => {
     // Otherwise selecting the text to copy it closes the thing being read.
     const onDismiss = vi.fn();

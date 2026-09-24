@@ -72,6 +72,19 @@ export const api = {
       `/comparisons/${encodeURIComponent(pairId)}?metric=${encodeURIComponent(metric)}`,
     ),
 
+  /**
+   * Remove a comparison, its trees, and the typing data only it was using.
+   *
+   * The only way data leaves: there is no expiry clock and no quota (§26).
+   * Trees still referenced by another comparison are kept, so this is not
+   * "delete these two trees" and cannot orphan a neighbour.
+   */
+  removeComparison: (comparisonId: string) =>
+    request<{ id: string; removed_datasets: string[] }>(
+      `/comparisons/${encodeURIComponent(comparisonId)}`,
+      { method: "DELETE" },
+    ),
+
   status: (comparisonId: string) =>
     request<ComparisonStatus>(
       `/comparisons/${encodeURIComponent(comparisonId)}/status`,

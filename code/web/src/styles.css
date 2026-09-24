@@ -177,6 +177,43 @@ body {
 .empty { color: var(--muted); font-size: 14px; }
 
 .pair-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+
+/* The row and its remove control sit side by side; the control is a sibling
+   rather than a child, since a button inside a button is invalid markup. */
+.pair-list li { position: relative; display: flex; align-items: stretch; gap: 6px; }
+.pair-list li .pair { flex: 1; min-width: 0; }
+
+.pair-remove {
+  flex: none;
+  width: 34px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  /* Reads as a quiet affordance until reached for: it is destructive, and a
+     list of them competing with the rows would be the loudest thing here. */
+  opacity: 0.45;
+  transition: opacity 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.pair-list li:hover .pair-remove,
+.pair-remove:focus-visible {
+  opacity: 1;
+}
+
+.pair-remove:hover,
+.pair-remove:focus-visible {
+  color: #c92a2a;
+  border-color: #f1aeae;
+}
+
+.notice-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+.primary.danger { background: #c92a2a; border-color: #c92a2a; }
+.primary.danger:hover:not(:disabled) { background: #a61e1e; border-color: #a61e1e; }
 .pair {
   display: grid;
   gap: 2px;
