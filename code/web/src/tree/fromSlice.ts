@@ -61,6 +61,39 @@ export interface SliceTree {
  */
 const UNLABELLED = new Set(["", "_"]);
 
+/**
+ * How much of the tree a clade must stand for before it is labelled.
+ *
+ * A wedge has no identifier of its own — it is a group of sequence types, not
+ * one — so left bare it reads as a leaf whose name went missing. Printing its
+ * leaf count says what it is and how big.
+ *
+ * Only the large ones, because labelling all of them is worse than labelling
+ * none: measured on the vibrio slice at this budget, 31 wedges hide
+ * 13,349 / 819 / 777 / 732 / 485 / 318 / 298 and then a tail of twos and
+ * threes. One percent names the seven that carry the tree and leaves the tail
+ * clean. A fraction rather than a fixed count, so it holds as you navigate
+ * into a subtree and the whole view gets smaller.
+ */
+const LABEL_WEDGE_ABOVE = 0.01;
+
+/**
+ * What the layout will draw beside a tip: a leaf's own label, a large clade's
+ * size, or nothing.
+ */
+function nameFor(
+  label: string,
+  isWedge: boolean,
+  standsFor: number,
+  totalLeaves: number,
+): string {
+  if (!UNLABELLED.has(label)) return label;
+  if (isWedge && standsFor >= Math.max(2, totalLeaves * LABEL_WEDGE_ABOVE)) {
+    return `${standsFor.toLocaleString()} leaves`;
+  }
+  return "";
+}
+
 export function treeFromSlice(slice: TreeSlice): SliceTree {
   const { id, parent, label, branch_len, true_leaf_count, truncated } = slice.nodes;
   const count = id.length;
@@ -77,7 +110,7 @@ export function treeFromSlice(slice: TreeSlice): SliceTree {
   const nodes: NewickNode[] = new Array(count);
   for (let k = 0; k < count; k += 1) {
     const node: NewickNode = {
-      name: UNLABELLED.has(label[k]) ? "" : label[k],
+      name: nameFor(label[k], truncated[k], true_leaf_count[k], slice.total_leaves),
       // What this node stands for in the FULL tree. The library sizes a wedge
       // and labels its tooltip from this; nothing local could work it out,
       // because a summarised clade arrives with no children to count.

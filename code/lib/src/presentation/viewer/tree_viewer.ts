@@ -82,6 +82,22 @@ export interface TreeViewerOptions {
   layoutMode?: LayoutMode; // default "cladogram"
   maxNodes?: number; // default 200
   hideInternalNodes?: boolean; // default true
+  /**
+   * How many labels Sigma will draw per grid cell, and how big a cell is in
+   * pixels.
+   *
+   * Sigma thins labels by dividing the viewport into cells and keeping the
+   * largest node in each. That suits a force-directed graph, whose nodes are
+   * spread over two dimensions. A dendrogram is the opposite: every tip is
+   * pinned to one x, so the whole column of them falls inside a single column
+   * of cells — at the 100px default a 550px-tall panel showed *one* label for
+   * fifty tips.
+   *
+   * Defaults leave Sigma's own behaviour untouched; a dendrogram consumer
+   * wants a much smaller cell.
+   */
+  labelDensity?: number;
+  labelGridCellSize?: number;
   rerootOn?: string;
   /**
    * Extra zoom-out applied after auto-fit so the tree sits centered with a
@@ -149,6 +165,8 @@ export class TreeViewer {
   private fitPadding: number;
   private reflect: boolean;
   private childOrder: ChildOrder;
+  private labelDensity?: number;
+  private labelGridCellSize?: number;
 
   /**
    * Pixels of content that extend to the right of the node bounding box (e.g.
@@ -210,6 +228,8 @@ export class TreeViewer {
     this.fitPadding = options.fitPadding ?? 0.3;
     this.reflect = options.reflect ?? false;
     this.childOrder = options.childOrder ?? orderByName;
+    this.labelDensity = options.labelDensity;
+    this.labelGridCellSize = options.labelGridCellSize;
 
     if (getComputedStyle(container).position === "static") {
       container.style.position = "relative";
@@ -490,6 +510,10 @@ export class TreeViewer {
       renderEdgeLabels: false,
       labelSize: 11,
       labelRenderedSizeThreshold: 0,
+      ...(this.labelDensity != null ? { labelDensity: this.labelDensity } : {}),
+      ...(this.labelGridCellSize != null
+        ? { labelGridCellSize: this.labelGridCellSize }
+        : {}),
       labelColor: { color: "#222" },
       defaultEdgeColor: BRANCH_COLOR, // fallback for any edge without its own color
       minCameraRatio: 0.02,

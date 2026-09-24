@@ -43,6 +43,9 @@ export interface ViewerConfig {
   reflect?: boolean;
   rerootOn?: string;
   fitPadding?: number;
+  /** See {@link TreeViewerOptions.labelDensity}. */
+  labelDensity?: number;
+  labelGridCellSize?: number;
   /** Swallow the native context menu inside this panel (default true). */
   suppressContextMenu?: boolean;
 }
@@ -297,6 +300,8 @@ function buildPanel(
     reflect: v.reflect,
     rerootOn: v.rerootOn,
     fitPadding: v.fitPadding,
+    labelDensity: v.labelDensity,
+    labelGridCellSize: v.labelGridCellSize,
     suppressContextMenu: v.suppressContextMenu,
   };
   const viewer = new TreeViewer(container, viewerOptions);

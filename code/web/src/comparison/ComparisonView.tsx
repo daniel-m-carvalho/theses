@@ -57,6 +57,17 @@ const VIEWER = {
   layoutMode: "cladogram",
   hideInternalNodes: true,
   maxNodes: 100_000,
+  /**
+   * Sigma thins labels by keeping the largest node per grid cell, which suits
+   * a graph spread over two dimensions. A dendrogram pins every tip to one x,
+   * so the whole column falls inside one column of cells: at the 100px default
+   * a 550px panel drew a single label for fifty tips.
+   *
+   * A cell close to the row spacing gives roughly one label per row, which is
+   * as many as can be read at this size anyway.
+   */
+  labelDensity: 1,
+  labelGridCellSize: PIXELS_PER_LEAF * 1.6,
 } as const;
 
 /**
