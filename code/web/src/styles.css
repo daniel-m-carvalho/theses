@@ -323,32 +323,68 @@ body {
 }
 .legend-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
   margin-bottom: 6px;
   flex-wrap: wrap;
 }
 .legend-label { font-size: 12px; color: var(--muted); flex: 0 0 auto; }
 
-.legend-columns {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--muted);
-}
-.legend-columns select {
-  min-width: 170px;
-  padding: 2px;
+
+.column-picker { position: relative; display: flex; align-items: center; gap: 6px; }
+
+/*
+ * Sized and bordered to sit beside the bar-length select as a pair: the
+ * closed state is a normal dropdown, and only the open state differs.
+ */
+.picker-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 150px;
+  max-width: 260px;
+  justify-content: space-between;
+  padding: 3px 7px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--bg);
   color: var(--ink);
   font: inherit;
   font-size: 12px;
+  line-height: 1.5;
+  cursor: pointer;
 }
-.legend-columns option { padding: 2px 6px; }
-.legend-hint { font-size: 11px; color: var(--muted); align-self: flex-start; }
+.picker-button:hover { border-color: var(--accent); }
+.picker-summary { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.picker-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  min-width: 210px;
+  max-height: 280px;
+  overflow: auto;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 2px;
+}
+.picker-menu label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.picker-menu label:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.picker-menu input { margin: 0; }
 
 .legend-scale { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
 .legend-scale select {

@@ -11,6 +11,7 @@
  * legend comes to disagree with the picture it explains.
  */
 
+import { useEffect, useRef, useState } from "react";
 import type { BarScale } from "phylo-tree-viewer";
 
 export function TypingLegend({
@@ -36,33 +37,18 @@ export function TypingLegend({
     String(a ?? "").localeCompare(String(b ?? "")),
   );
 
+  const toggle = (key: string) =>
+    onSegmentKeys(
+      segmentKeys.includes(key)
+        ? segmentKeys.filter((candidate) => candidate !== key)
+        : [...segmentKeys, key],
+    );
+
   return (
     <footer className="typing-legend">
       <div className="legend-head">
-        <label className="legend-columns">
-          Colour by
-          {/*
-            A native multi-select, as asked for. Worth knowing how it is
-            driven: a plain click *replaces* the selection, so adding a second
-            column needs Ctrl (Cmd on a Mac) and a range needs Shift. Nothing
-            on screen says so, which is why the hint sits beside it.
-          */}
-          <select
-            multiple
-            size={Math.min(6, Math.max(3, keys.length))}
-            value={segmentKeys}
-            onChange={(event) =>
-              onSegmentKeys([...event.target.selectedOptions].map((option) => option.value))
-            }
-          >
-            {keys.map((key) => (
-              <option key={key} value={key}>
-                {key}
-              </option>
-            ))}
-          </select>
-        </label>
-        <span className="legend-hint">Ctrl/Cmd-click to add, Shift-click for a range</span>
+        <ColumnPicker keys={keys} chosen={segmentKeys} onToggle={toggle} />
+
 
         <label className="legend-scale">
           Bar length
@@ -96,5 +82,82 @@ export function TypingLegend({
         ))}
       </ul>
     </footer>
+  );
+}
+
+/**
+ * A dropdown that stays open while you tick several columns.
+ *
+ * Shaped like the bar-length select beside it — the same compact closed
+ * state — but a native `<select multiple>` cannot be that: browsers render it
+ * as a permanently expanded list box, and adding a second option needs
+ * Ctrl/Cmd-click, which nothing on screen can tell you.
+ *
+ * This opens *upward*, out of the footer's box. That is why the footer must
+ * not scroll: an overflow-scrolling ancestor clips an absolutely positioned
+ * descendant, and the menu was once rendered and then cut away entirely,
+ * leaving clicks to land on the tree canvas behind it.
+ */
+function ColumnPicker({
+  keys,
+  chosen,
+  onToggle,
+}: {
+  keys: string[];
+  chosen: string[];
+  onToggle: (key: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const away = (event: MouseEvent) => {
+      if (!ref.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const key = (event: KeyboardEvent) => event.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", away);
+    document.addEventListener("keydown", key);
+    return () => {
+      document.removeEventListener("mousedown", away);
+      document.removeEventListener("keydown", key);
+    };
+  }, [open]);
+
+  const summary =
+    chosen.length === 0
+      ? "none"
+      : chosen.length <= 2
+        ? chosen.join(", ")
+        : `${chosen.length} columns`;
+
+  return (
+    <div className="column-picker" ref={ref}>
+      <span className="legend-label">Colour by</span>
+      <button
+        type="button"
+        className="picker-button"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span className="picker-summary">{summary}</span>
+        <span aria-hidden="true">▾</span>
+      </button>
+
+      {open ? (
+        <div className="picker-menu" role="group" aria-label="Typing columns">
+          {keys.map((key) => (
+            <label key={key}>
+              <input
+                type="checkbox"
+                checked={chosen.includes(key)}
+                onChange={() => onToggle(key)}
+              />
+              {key}
+            </label>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
