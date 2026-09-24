@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ComparisonOperator } from "./comparison";
 import { SequentialColorScale } from "../color/color_scale";
 import { keyByName } from "../data/comparison";
@@ -296,5 +296,42 @@ describe("pointing at a node the view is already arranged around", () => {
     // Centering zooms to 0.7, which on a freshly fitted subtree crops the
     // structure the node was worth pointing at within.
     expect({ x: camera.x, y: camera.y, ratio: camera.ratio }).toEqual(before);
+  });
+});
+
+describe("how long a located node stays marked", () => {
+  it("flashes the requested number of times, then stops marking it", () => {
+    vi.useFakeTimers();
+    try {
+      const h = makeHarness(namedTree());
+      const cmp = new ComparisonOperator({
+        enabled: true,
+        keyOf: keyByName,
+        flashes: 5,
+        flashInterval: 100,
+      });
+      cmp.attach(h.viewer);
+      h.render();
+
+      const lit = () => h.styleOf("named_a").color === "#ff0000";
+      cmp.highlightByKey("a", { center: false });
+
+      // On immediately, then dark and lit again on each pair of ticks.
+      const seen: boolean[] = [lit()];
+      for (let tick = 1; tick < 10; tick += 1) {
+        vi.advanceTimersByTime(100);
+        seen.push(lit());
+      }
+      expect(seen).toEqual([true, false, true, false, true, false, true, false, true, false]);
+      // Five on-phases: the change is what draws the eye, so they are counted.
+      expect(seen.filter(Boolean)).toHaveLength(5);
+
+      // And it is over — a permanent mark would claim the node is special for
+      // as long as the panel is open, when the view merely came here once.
+      vi.advanceTimersByTime(1000);
+      expect(lit()).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

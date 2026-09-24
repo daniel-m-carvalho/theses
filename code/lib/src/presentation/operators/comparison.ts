@@ -77,6 +77,18 @@ export interface ComparisonOptions {
   /** Membership marker size (px) so the leaf color reads clearly. Default 6. */
   markerSize?: number;
   /**
+   * How many times a located node shows itself before the highlight goes away
+   * (default 3). One flash is one on-phase; the node is dark between them, so
+   * what draws the eye is the change, not the colour.
+   *
+   * The highlight is deliberately temporary. A permanent mark would say "this
+   * node is special" for as long as the panel is open, when what actually
+   * happened is that the view moved here once.
+   */
+  flashes?: number;
+  /** Milliseconds each on- or off-phase lasts (default 300). */
+  flashInterval?: number;
+  /**
    * Membership hover wording, `[different, equal]`. Default
    * `["different", "equal"]`. Both are still used by the tooltip — hovering says
    * which state a leaf is in — even though only "equal" is *painted*; the legend
@@ -149,6 +161,8 @@ export class ComparisonOperator implements TreeOperator {
   private highlightedId: string | null = null;
   private blinkOn = true;
   private blinkTimer: ReturnType<typeof setInterval> | null = null;
+  private flashes: number;
+  private flashInterval: number;
 
   private legendEl: HTMLDivElement;
   private tooltipEl: HTMLDivElement;
@@ -171,6 +185,8 @@ export class ComparisonOperator implements TreeOperator {
     this.isDifferentFn = options.isDifferent;
     this.equalColor = options.equalColor ?? "#0077bb";
     this.markerSize = options.markerSize ?? 6;
+    this.flashes = Math.max(1, Math.round(options.flashes ?? 3));
+    this.flashInterval = Math.max(50, options.flashInterval ?? 300);
     this.membershipLabels = options.membershipLabels ?? ["different", "equal"];
     this.showLegend = options.legend ?? true;
     this.legendLabels = options.legendLabels ?? ["different", "similar"];
@@ -408,16 +424,29 @@ export class ComparisonOperator implements TreeOperator {
     );
   }
 
+  /**
+   * Flash the highlighted node `flashes` times, then remove the highlight.
+   *
+   * The first on-phase is immediate, so two ticks buy one further flash: the
+   * node goes dark on the odd tick and lights up again on the even one. The
+   * last off-phase clears the highlight rather than lighting it a final time,
+   * which is why the count is exactly `flashes * 2`.
+   */
   private startBlink(): void {
     this.stopBlink();
     let ticks = 0;
+    const last = this.flashes * 2;
     this.blinkOn = true;
     this.viewer?.applyReducers();
     this.blinkTimer = setInterval(() => {
+      ticks += 1;
+      if (ticks >= last) {
+        this.clearHighlight();
+        return;
+      }
       this.blinkOn = !this.blinkOn;
       this.viewer?.applyReducers();
-      if (++ticks >= 6) this.clearHighlight();
-    }, 300);
+    }, this.flashInterval);
   }
 
   private stopBlink(): void {

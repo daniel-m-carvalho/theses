@@ -481,19 +481,9 @@ body {
 .export-error { color: var(--danger); font-size: 13px; margin: 12px 0 0; }
 .export-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
 
-/* Where a cross-tree jump landed. The dot repeats the marker drawn on the
-   node, so the line and the tree agree without a legend. */
+/* Where a cross-tree jump landed. The node itself only flashes, so this line
+   is what remains once it has; it names the leaf, which is what lets someone
+   confirm they got the one they asked for. */
 .side-counts.arrival {
-  display: flex;
-  align-items: center;
-  gap: 6px;
   color: var(--ink);
-}
-
-.arrival-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: #ff0000;
-  flex: none;
 }

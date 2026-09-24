@@ -109,15 +109,15 @@ function wedgeColorFrom(scale: SequentialColorScale) {
 }
 
 /**
- * How the leaf a jump was aimed at is marked once the panel lands.
+ * How a jump announces where it landed.
  *
- * Deliberately outside the divergence ramp, which runs blue -> cyan -> green
- * -> yellow: a marker drawn in one of those colours would read as a value on
- * the scale. It is also the colour the library blinks a located node in, so
- * the blink settles into the mark rather than handing over to a different one.
+ * Five flashes, then nothing. A permanent mark would go on claiming the node
+ * is special for as long as the panel is open, when what actually happened is
+ * that the view came here once — and it competes with the divergence colouring
+ * for the same attention. What draws the eye is the change, not the colour, so
+ * the node going dark between flashes is half of the signal.
  */
-const ARRIVAL_COLOR = "#ff0000";
-const ARRIVAL_SIZE = 9;
+const ARRIVAL_FLASHES = 5;
 
 const CONFIG: Config = {
   panels: [
@@ -159,6 +159,7 @@ const CONFIG: Config = {
     // (`setColor` on the presenter), which is the marker as far as the eye is
     // concerned; `colorEdges` is what the switch moves.
     colorNodes: false,
+    flashes: ARRIVAL_FLASHES,
     legend: true,
     legendLabels: ["identical", "diverged"],
   },
@@ -317,10 +318,6 @@ export function ComparisonView({
   const sides = useRef<[SideState, SideState]>([left, right]);
   sides.current = [left, right];
 
-  // Same reason: the node reducer below is installed once, so it reads the
-  // arrival through a ref rather than closing over the render it was built in.
-  const arrivedAt = useRef<[number | null, number | null]>([null, null]);
-  arrivedAt.current = [left.arrivedAt, right.arrivedAt];
 
   const bothLoaded = Boolean(left.tree && right.tree);
 
@@ -389,22 +386,7 @@ export function ComparisonView({
       // Mark the leaf this panel was sent to. The library centres and blinks
       // it on arrival, which draws the eye once; this is what is still there
       // when the user looks back, and it lasts until they navigate away.
-      const unmark = panel.viewer.addNodeReducer(
-        (key: string, data: Record<string, unknown>) => {
-          const wanted = arrivedAt.current[side];
-          if (wanted === null) return data;
-          if (keyToStoredId.current[side].get(key) !== wanted) return data;
-          return {
-            ...data,
-            color: ARRIVAL_COLOR,
-            size: Math.max((data.size as number) || 0, ARRIVAL_SIZE),
-            zIndex: 20,
-          };
-        },
-      );
-
       const off = [
-        unmark,
         panel.viewer.events.on("render", () => refreshKeys(side, panel.viewer)),
         panel.viewer.events.on("rightClickNode", ({ node, x, y, original }) => {
           // The emit is synchronous inside the DOM dispatch, so this still
@@ -468,11 +450,10 @@ export function ComparisonView({
     built.panels.forEach((panel, index) => {
       const side = index as 0 | 1;
       refreshKeys(side, panel.viewer);
-      panel.viewer.applyReducers();
       const wanted = sides.current[side].arrivedAt;
       if (wanted === null) return;
       const label = sides.current[side].tree?.byStoredId.get(wanted)?.name;
-      // The blink is the library's, and it keys by name — which is what
+      // The flashing is the library's, and it keys by name — which is what
       // `keyBy: "name"` means here, and is exact for a leaf. Not its camera
       // move: the panel was just re-rooted around this node, and centring
       // zooms in far enough to crop the neighbourhood that is the point.
@@ -751,8 +732,7 @@ function Side({
       */}
       {arrivedLabel ? (
         <p className="side-counts arrival">
-          <span className="arrival-dot" aria-hidden="true" /> found{" "}
-          <strong>{arrivedLabel}</strong> from the other tree
+          found <strong>{arrivedLabel}</strong> from the other tree
         </p>
       ) : null}
     </div>

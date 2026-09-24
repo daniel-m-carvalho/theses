@@ -2890,15 +2890,18 @@ Landing in the right neighbourhood is only half of "find this leaf in the other 
 tips, one of which is the answer, the panel still has to say which — so the arrival is signalled
 three ways, none of which is a legend:
 
-* the node is drawn as a **red marker**, deliberately outside the divergence ramp (blue → cyan →
-  green → yellow) so it cannot be read as a value on the scale;
-* the library **blinks** it once, which draws the eye on arrival;
-* the panel header reads **"● found 6765 from the other tree"**, naming it, because a dot says
+* the node **flashes five times** in red — deliberately outside the divergence ramp (blue → cyan →
+  green → yellow) so it cannot be read as a value on the scale — and is dark between flashes,
+  because what draws the eye is the change rather than the colour;
+* the panel header reads **"found 6765 from the other tree"**, naming it, because a flash says
   "over there" and a label is what lets someone check they are looking at the leaf they asked for.
 
-The mark persists until the next ordinary navigation, which is what `arrivedAt` (the slice's `keep`,
-surfaced on `SideState`) already tracks. The blink alone would be gone by the time anyone looked
-back.
+A first version left the marker on permanently, driven by `arrivedAt` (the slice's `keep`, surfaced
+on `SideState`) through a node reducer. Withdrawn: a permanent mark goes on claiming the node is
+special for as long as the panel is open, when what actually happened is that the view came here
+once — and it competes with the divergence colouring for the same attention. The header line is
+what remains afterwards, which is the part worth keeping. `flashes` and `flashInterval` are
+comparison options, so the count is the caller's decision rather than a constant in the library.
 
 **The library's `highlightByKey` had to grow an option.** It centred *and* zoomed to `ratio` 0.7,
 which on a freshly fitted twenty-leaf subtree crops the surrounding structure — the exact context

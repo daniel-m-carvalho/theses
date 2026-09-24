@@ -140,6 +140,10 @@ export interface ComparisonConfig {
   leafColor?: string;
   equalColor?: string;
   markerSize?: number;
+  /** Times a located node flashes before the highlight goes (default 3). */
+  flashes?: number;
+  /** Milliseconds per on- or off-phase of that flashing (default 300). */
+  flashInterval?: number;
   membershipLabels?: [string, string];
   legend?: boolean;
   legendLabels?: [string, string];
@@ -399,6 +403,8 @@ function buildPanel(
       leafColor: c.leafColor,
       equalColor: c.equalColor,
       markerSize: c.markerSize,
+      flashes: c.flashes,
+      flashInterval: c.flashInterval,
       membershipLabels: c.membershipLabels,
       legend: c.legend,
       legendLabels: c.legendLabels,
