@@ -283,6 +283,22 @@ describe("moving the gradient between branches and markers", () => {
 });
 
 describe("pointing at a node the view is already arranged around", () => {
+  it("blinks in the colour asked for, not a fixed red", () => {
+    // Red means "not in the other tree" in the app that drives this, so a
+    // momentary signal sharing that hue would read as a permanent claim.
+    const h = makeHarness(namedTree());
+    const cmp = new ComparisonOperator({
+      enabled: true,
+      keyOf: keyByName,
+      highlightColor: "#d400ff",
+    });
+    cmp.attach(h.viewer);
+    h.render();
+
+    cmp.highlightByKey("a", { center: false });
+    expect(h.styleOf("named_a").color).toBe("#d400ff");
+  });
+
   it("can blink without moving the camera", () => {
     const h = makeHarness(namedTree());
     const cmp = new ComparisonOperator({ enabled: true, keyOf: keyByName });
@@ -341,6 +357,22 @@ describe("branches the backend gave no value for", () => {
   // state. They are not on the scale at all — no counterpart means no score,
   // which is not a score of zero — so they get a colour and a row of their own.
   const partial = () => new Map([["a", 0]]);
+
+  it("draws them at the same width as a branch that has a value", () => {
+    // Two different answers, not two degrees of confidence: a thinner line
+    // would read as a weaker version of the same statement.
+    const h = makeHarness(namedTree());
+    new ComparisonOperator({
+      enabled: true,
+      values: partial(),
+      keyOf: keyByName,
+      absentColor: "#e03131",
+      edgeWidth: 3,
+    }).attach(h.viewer);
+    h.render();
+
+    expect(h.edgeStyleOf("named_c")!.size).toBe(h.edgeStyleOf("named_a")!.size);
+  });
 
   it("paints them in the colour given, not from the ramp", () => {
     const h = makeHarness(namedTree());

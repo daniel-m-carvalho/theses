@@ -2947,8 +2947,18 @@ noticing absences while colouring — a reducer runs only when the renderer asks
 driven by that side effect describes whatever happened to be drawn last. Removing the condition
 removed the problem.)
 
+Those branches are drawn at the **same width** as branches that do carry a value. Two different
+answers, not two degrees of confidence: a thinner line would read as a weaker version of the same
+statement rather than a different kind of one.
+
 Legend and colour-key text is sentence case throughout: **Identical**, **Diverged**, **Not in the
 other tree**.
+
+**Red forced the flash to move.** A located node blinked in `#ff0000`, which now means "not in the
+other tree" on the same screen — a momentary *look here* sharing a hue with a permanent claim about
+a branch. The blink colour became an option (`highlightColor`) and the app sets magenta `#d400ff`,
+the one part of the wheel nothing else in the view claims: the ramp runs blue → cyan → green →
+yellow and absence is red.
 
 The same finding renamed a legend entry in the export. "diverged — no counterpart in the other tree"
 was wrong twice over once black exists, since *that* is what having no counterpart looks like; the

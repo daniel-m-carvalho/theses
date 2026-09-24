@@ -134,10 +134,19 @@ const ABSENT_LABEL = "Not in the other tree";
 /*
  * Red, and deliberately not the tree's own colour: black is also what an
  * unstyled branch looks like, so "no data" and "nothing has happened here"
- * read as the same picture. A shade rather than pure red, which the arrival
- * flash uses — that one pulses on a node marker, this one is a static branch.
+ * read as the same picture.
  */
 const ABSENT_COLOR = "#e03131";
+
+/**
+ * The colour a jump's target blinks in.
+ *
+ * Magenta because every other hue in this view is spoken for: the divergence
+ * ramp runs blue → cyan → green → yellow, and red now means "not in the other
+ * tree". A flash says *look here* for three seconds; sharing a hue with a
+ * permanent statement about a branch would make it read as one.
+ */
+const ARRIVAL_COLOR = "#d400ff";
 
 
 const CONFIG: Config = {
@@ -194,6 +203,7 @@ const CONFIG: Config = {
      */
     absentLabel: ABSENT_LABEL,
     absentColor: ABSENT_COLOR,
+    highlightColor: ARRIVAL_COLOR,
   },
   /**
    * Panels are NOT linked.

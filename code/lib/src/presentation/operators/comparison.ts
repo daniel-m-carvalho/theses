@@ -81,9 +81,20 @@ export interface ComparisonOptions {
    *
    * Worth setting to something loud. The default tree colour is also what an
    * unstyled branch looks like, so "no data" and "nothing has happened here"
-   * become the same picture.
+   * become the same picture. Drawn at {@link edgeWidth}, like a branch that
+   * does carry a value: the two are different answers, not different amounts
+   * of confidence, so neither should look fainter than the other.
    */
   absentColor?: string;
+  /**
+   * Colour a located node blinks in (default "#ff0000").
+   *
+   * Set it to something no other colour in the view claims. It has to be read
+   * as "look here" rather than as a value, so it must sit outside the value
+   * ramp **and** outside {@link absentColor} — sharing a hue with either makes
+   * a momentary signal look like a permanent statement about the node.
+   */
+  highlightColor?: string;
   /** Presentation strategy (default "gradient"). See {@link ComparisonMode}. */
   mode?: ComparisonMode;
   /** Membership mode: set of node keys that DIFFER between the two trees. */
@@ -170,6 +181,7 @@ export class ComparisonOperator implements TreeOperator {
   private leafColor: string;
   private absentLabel?: string;
   private absentColor?: string;
+  private highlightColor: string;
   private mode: ComparisonMode;
   private differing?: DifferenceSet;
   private isDifferentFn?: DifferencePredicate;
@@ -206,6 +218,7 @@ export class ComparisonOperator implements TreeOperator {
     this.leafColor = options.leafColor ?? "#212529";
     this.absentLabel = options.absentLabel;
     this.absentColor = options.absentColor;
+    this.highlightColor = options.highlightColor ?? "#ff0000";
     this.mode = options.mode ?? "gradient";
     this.differing = options.differing ? new Set(options.differing) : undefined;
     this.isDifferentFn = options.isDifferent;
@@ -346,7 +359,9 @@ export class ComparisonOperator implements TreeOperator {
     // and a fabricated mid-scale value would be a lie. `absentColor` gives it
     // a colour of its own instead; see the option.
     if (value == null) {
-      return this.absentColor ? { ...data, color: this.absentColor } : data;
+      return this.absentColor
+        ? { ...data, color: this.absentColor, size: this.edgeWidth }
+        : data;
     }
     return { ...data, color: this.scale.color(value), size: this.edgeWidth };
   }
@@ -384,7 +399,7 @@ export class ComparisonOperator implements TreeOperator {
     // Navigation highlight overrides coloring while blinking.
     if (node === this.highlightedId && this.blinkOn) {
       const size = (result.size as number) || 4;
-      result = { ...result, color: "#ff0000", size: size + 4, zIndex: 10 };
+      result = { ...result, color: this.highlightColor, size: size + 4, zIndex: 10 };
     }
 
     return result;

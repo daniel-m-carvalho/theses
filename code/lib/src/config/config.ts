@@ -141,6 +141,8 @@ export interface ComparisonConfig {
   /** Legend row for branches the backend gave no value for. Unset = no row. */
   absentLabel?: string;
   absentColor?: string;
+  /** Colour a located node blinks in. Keep it clear of the ramp and absentColor. */
+  highlightColor?: string;
   equalColor?: string;
   markerSize?: number;
   /** Times a located node flashes before the highlight goes (default 3). */
@@ -406,6 +408,7 @@ function buildPanel(
       leafColor: c.leafColor,
       absentLabel: c.absentLabel,
       absentColor: c.absentColor,
+      highlightColor: c.highlightColor,
       equalColor: c.equalColor,
       markerSize: c.markerSize,
       flashes: c.flashes,
