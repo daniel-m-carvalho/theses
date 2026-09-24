@@ -73,6 +73,21 @@ describe("a real slice from the backend", () => {
     expect(built.trueLeafCountOf(root)).toBe(slice.total_leaves);
   });
 
+  it("carries each node's similarity on the node, not in a lookup by id", () => {
+    /**
+     * A stored id is a pre-order index *within one tree*, so the two trees'
+     * ids collide: in the vibrio pair id 1 scores 1.0 on one side and 0.487
+     * on the other. A provider resolving a node by id alone could hand a
+     * panel the other tree's value and paint an identical clade as diverged.
+     */
+    const built = treeFromSlice(slice);
+    const values = slice.comparison!.similarity;
+    for (const [storedId, at] of built.indexOfStoredId) {
+      const node = built.byStoredId.get(storedId)!;
+      expect(node.metadata?.similarity ?? null).toBe(values[at]);
+    }
+  });
+
   it("indexes stored ids back to slice positions, for comparison values", () => {
     const built = treeFromSlice(slice);
     // Comparison values are positional and aligned to `nodes`, so a node's

@@ -313,15 +313,18 @@ export function ComparisonView({
           hidden > 0 ? ` (+${hidden.toLocaleString()} unrecorded)` : ""
         }`;
       },
-      // The provider is handed the node as well as the key; the node carries
-      // the backend's id, which is the only identifier both sides agree on.
-      // Keying by name would break on the unnamed internal nodes that make up
-      // most of a slice.
+      /**
+       * The node carries its own value.
+       *
+       * Keying by name would break on the unnamed internal nodes that make up
+       * most of a slice; keying by stored id is worse, because an id is a
+       * pre-order index *within one tree* and the two trees' ranges overlap —
+       * a lookup that tried one side and fell back to the other could paint a
+       * panel with the other tree's numbers.
+       */
       valueFor: (_key: string, node) => {
-        const storedId = node.metadata?.storedId;
-        if (typeof storedId !== "number") return undefined;
-        const [l, r] = sides.current;
-        return l.gradient.similarityOf(storedId) ?? r.gradient.similarityOf(storedId);
+        const value = node.metadata?.similarity;
+        return typeof value === "number" ? value : undefined;
       },
     });
     handle.current = built;

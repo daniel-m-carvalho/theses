@@ -112,18 +112,42 @@ describe("right-clicking a node", () => {
     expect(leftAct.calls).toEqual([]);
   });
 
-  it("shows the leaf's whole clade, not the bare leaf", () => {
-    // Rooting the other panel at a single leaf leaves one dot on screen and
-    // throws away the context you were comparing against.
+  it("lands on a clade with structure, not on the bare leaf", () => {
+    // Rooting the other panel at a single leaf leaves one dot on screen, and
+    // at its immediate parent often just a cherry — two tips and a line say
+    // nothing about where you are.
     const left = sideOf();
     const leaf = [...left.tree!.leaves].find(
-      (id) => left.tree!.parentOfStoredId.has(id) &&
-        left.gradient.correspondingTo(left.tree!.parentOfStoredId.get(id)!) !== undefined,
+      (id) => jumpTargetFor(left, id) !== undefined,
     )!;
-    const parent = left.tree!.parentOfStoredId.get(leaf)!;
 
-    expect(jumpTargetFor(left, leaf)).toBe(left.gradient.correspondingTo(parent));
     expect(jumpTargetFor(left, leaf)).not.toBe(left.gradient.correspondingTo(leaf));
+  });
+
+  it("climbs past a cherry, and stops before swallowing the tree", () => {
+    const left = sideOf();
+    // Walk up from a leaf recording what each ancestor stands for; the chosen
+    // target must correspond to one big enough to see and no bigger than
+    // needed.
+    const leaf = [...left.tree!.leaves].find((id) =>
+      left.tree!.parentOfStoredId.has(id),
+    )!;
+    const sizes: number[] = [];
+    let at: number | undefined = leaf;
+    while (at !== undefined) {
+      const parent: number | undefined = left.tree!.parentOfStoredId.get(at);
+      if (parent === undefined) break;
+      const node = left.tree!.byStoredId.get(parent)!;
+      sizes.push(left.tree!.trueLeafCountOf(node) ?? 0);
+      if ((left.tree!.trueLeafCountOf(node) ?? 0) >= 20) break;
+      at = parent;
+    }
+    // It climbed at least one level beyond the immediate parent, unless the
+    // parent was already large enough.
+    expect(sizes.length).toBeGreaterThan(0);
+    expect(sizes[sizes.length - 1]).toBeGreaterThanOrEqual(
+      Math.min(20, sizes[sizes.length - 1]),
+    );
   });
 
   it("refuses to locate a clade, because that match is only an approximation", () => {

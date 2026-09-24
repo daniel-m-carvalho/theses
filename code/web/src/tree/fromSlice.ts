@@ -94,6 +94,10 @@ export function treeFromSlice(
   options: SliceTreeOptions = {},
 ): SliceTree {
   const { id, parent, label, branch_len, true_leaf_count, truncated } = slice.nodes;
+  // Values arrive aligned index-for-index with the topology, so a node's
+  // similarity is read off at its own position — no join, and no lookup that
+  // could reach the other tree.
+  const similarity = slice.comparison?.similarity;
   const count = id.length;
   if (count === 0) throw new Error("slice contains no nodes");
 
@@ -117,6 +121,18 @@ export function treeFromSlice(
         storedId: id[k],
         trueLeafCount: true_leaf_count[k],
         truncated: truncated[k] ? 1 : 0,
+        /**
+         * How much this clade agrees with the other tree, carried on the node
+         * itself.
+         *
+         * Not looked up by id later. A stored id is a **pre-order index within
+         * one tree**, so the two trees' ids collide — id 1 exists in both, and
+         * in the vibrio pair it scores 1.0 on one side and 0.487 on the other.
+         * A provider that resolved a node by id alone could hand a panel the
+         * other tree's value, painting a clade that is identical in both as
+         * diverged.
+         */
+        similarity: similarity?.[k] ?? null,
         // The label exactly as sent, for the menu title.
         label: label[k],
       },
