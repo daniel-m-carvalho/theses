@@ -26,6 +26,10 @@ export interface ReportInput {
   showing: { left: string; right: string };
   typing?: { columns: string[]; scale: string } | null;
   gradient: boolean;
+  /** Category colour assignments, so the report can name each one. */
+  swatches?: ReadonlyMap<string, string>;
+  /** The two ends of the divergence scale, as drawn. */
+  gradientEnds?: { identical: string; diverged: string };
 }
 
 const count = (value: number) => value.toLocaleString();
@@ -41,7 +45,7 @@ export function buildReport(input: ReportInput): Report {
 
   if (images.length) {
     sections.push({
-      heading: "The trees, as shown",
+      heading: "Panels",
       body: [
         // Said plainly, because a reader cannot tell from the picture: these
         // are summaries, and a triangle is a clade that was never opened.
@@ -63,10 +67,7 @@ export function buildReport(input: ReportInput): Report {
 
     const dropped = summary.dropped_from_left.length + summary.dropped_from_right.length;
     sections.push({
-      heading: "What the distance was computed over",
-      body: [
-        "A metric can only see leaves both trees have, so the pair is first restricted to the leaves they share.",
-      ],
+      heading: "Additional metric information",
       fields: [
         { label: "Shared leaves", value: count(summary.shared_leaves) },
         {
@@ -95,12 +96,28 @@ export function buildReport(input: ReportInput): Report {
     });
   }
 
-  const settings: string[] = [
-    `Divergence colouring ${input.gradient ? "on" : "off"}`,
-  ];
+  // --- view setup -----------------------------------------------------
+  // Everything here exists so somebody reading the pictures can tell what the
+  // colours mean. Without it the report shows two trees in seven colours and
+  // no way to learn what any of them is.
+  const settings: string[] = [];
+  const swatches: { label: string; color: string }[] = [];
+
+  if (input.gradient) {
+    settings.push(
+      "Branches are coloured by how much the two trees disagree at that clade.",
+    );
+    swatches.push(
+      { label: "identical — the same clade in both trees", color: input.gradientEnds?.identical ?? "#3b4cc0" },
+      { label: "diverged — no counterpart in the other tree", color: input.gradientEnds?.diverged ?? "#f2e661" },
+    );
+  } else {
+    settings.push("Divergence colouring was off: branch colour carries no meaning here.");
+  }
+
   if (input.typing?.columns.length) {
     settings.push(
-      `Typing data coloured by ${input.typing.columns.join(", ")}, bars on a ${input.typing.scale} scale`,
+      `Each leaf carries a bar of its isolates, coloured by ${input.typing.columns.join(", ")}, on a ${input.typing.scale} scale. A leaf with no bar has no typing data.`,
     );
     if (input.typing.columns.length > 1) {
       // The one thing a reader of the picture could not work out, and would
@@ -109,14 +126,20 @@ export function buildReport(input: ReportInput): Report {
         `Each isolate is counted once per column, so bar lengths are ${input.typing.columns.length}× the isolate count. They remain comparable between leaves.`,
       );
     }
+    for (const [label, color] of input.swatches ?? []) {
+      swatches.push({ label, color });
+    }
   } else {
-    settings.push("Typing data not shown");
+    settings.push("Typing data was not shown, so the leaves carry no bars.");
   }
 
   return {
     title: input.title,
     subtitle: `${pair.left} vs ${pair.right}`,
-    sections: [...sections, { heading: "How this view was set up", body: settings }],
+    sections: [
+      ...sections,
+      { heading: "View setup", body: settings, swatches },
+    ],
     footnotes: [
       "Produced by PhyloDelta. Distances are computed on the server over the whole tree, not over the summary shown here.",
     ],

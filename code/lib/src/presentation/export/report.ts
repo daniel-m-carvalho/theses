@@ -19,6 +19,12 @@ export interface ReportField {
   note?: string;
 }
 
+export interface ReportSwatch {
+  label: string;
+  /** Any CSS colour. Shown as a chip beside the label. */
+  color: string;
+}
+
 export interface ReportImage {
   /** A data URI, so the document stays self-contained. */
   src: string;
@@ -30,6 +36,11 @@ export interface ReportSection {
   /** Paragraphs, before anything else in the section. */
   body?: string[];
   fields?: ReportField[];
+  /**
+   * A legend. Without one, a reader of the pictures can see that two clades
+   * are different colours and has no way to learn what either colour means.
+   */
+  swatches?: ReportSwatch[];
   images?: ReportImage[];
   /** Set apart and emphasised — a caveat the reader must not skim past. */
   caution?: string;
@@ -70,6 +81,20 @@ function renderFields(fields: ReportField[]): string {
   );
 }
 
+function renderSwatches(swatches: ReportSwatch[]): string {
+  return (
+    `<ul class="swatches">` +
+    swatches
+      .map(
+        (swatch) =>
+          `<li><span class="chip" style="background:${escape(swatch.color)}"></span>` +
+          `${escape(swatch.label)}</li>`,
+      )
+      .join("") +
+    `</ul>`
+  );
+}
+
 function renderImages(images: ReportImage[]): string {
   return (
     `<div class="figures">` +
@@ -91,6 +116,7 @@ function renderSection(section: ReportSection): string {
     (section.body ?? []).map((line) => `<p>${escape(line)}</p>`).join("") +
     (section.caution ? `<p class="caution">${escape(section.caution)}</p>` : "") +
     (section.fields?.length ? renderFields(section.fields) : "") +
+    (section.swatches?.length ? renderSwatches(section.swatches) : "") +
     (section.images?.length ? renderImages(section.images) : "") +
     `</section>`
   );
@@ -121,6 +147,9 @@ export function renderReport(report: Report): string {
   .fields dt { font-size: 12px; color: #6b7180; }
   .fields dd { margin: 2px 0 0; font-size: 17px; font-variant-numeric: tabular-nums; }
   .fields .note { display: block; font-size: 12px; color: #6b7180; font-variant-numeric: normal; }
+  .swatches { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 5px 16px; font-size: 13px; }
+  .swatches li { display: flex; align-items: center; gap: 6px; }
+  .chip { width: 12px; height: 12px; border-radius: 3px; border: 1px solid rgb(0 0 0 / 12%); }
   .figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
   figure { margin: 0; }
   figure img { width: 100%; border: 1px solid #e2e4ea; border-radius: 8px; }

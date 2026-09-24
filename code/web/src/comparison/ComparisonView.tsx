@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   createComparison,
+  DIFF_PALETTE,
   snapshotViewer,
   type BarScale,
   type ComparisonHandle,
@@ -464,6 +465,13 @@ export function ComparisonView({
             showing: { left: showing(left), right: showing(right) },
             typing: showTyping ? { columns: segmentKeys, scale: barScale } : null,
             gradient: showGradient,
+            swatches: showTyping ? swatches : undefined,
+            // The ends of the scale the operator actually draws with, rather
+            // than colours named here that could drift from it.
+            gradientEnds: {
+              identical: DIFF_PALETTE[0],
+              diverged: DIFF_PALETTE[DIFF_PALETTE.length - 1],
+            },
           }),
           `${choices.title.replace(/[^\w.-]+/g, "-").toLowerCase()}.html`,
         );
@@ -474,7 +482,18 @@ export function ComparisonView({
         setExportBusy(false);
       }
     },
-    [pair, summary, left, right, showTyping, segmentKeys, barScale, showGradient, onExportClose],
+    [
+      pair,
+      summary,
+      left,
+      right,
+      showTyping,
+      segmentKeys,
+      barScale,
+      showGradient,
+      swatches,
+      onExportClose,
+    ],
   );
 
   const dismiss = useCallback(() => setMenu(null), []);

@@ -94,6 +94,7 @@ export type {
   ReportSection,
   ReportField,
   ReportImage,
+  ReportSwatch,
 } from "./presentation/export/report";
 export { snapshotViewer } from "./presentation/export/snapshot";
 export type { SnapshotOptions } from "./presentation/export/snapshot";

@@ -91,3 +91,35 @@ describe("renderReport", () => {
     expect(html).not.toContain("<figure>");
   });
 });
+
+describe("legends", () => {
+  it("names each colour, so the pictures can be read at all", () => {
+    // Without this a reader sees that two clades differ in colour and has no
+    // way to learn what either colour means.
+    const html = renderReport({
+      title: "t",
+      generated: new Date("2026-09-24T10:30:00Z"),
+      sections: [
+        {
+          heading: "View setup",
+          swatches: [
+            { label: "Human", color: "#e05c5c" },
+            { label: "Environment", color: "#2f5fd0" },
+          ],
+        },
+      ],
+    });
+    expect(html).toContain("background:#e05c5c");
+    expect(html).toContain("Human");
+    expect(html).toContain("Environment");
+  });
+
+  it("escapes a colour, which is a string like any other", () => {
+    const html = renderReport({
+      title: "t",
+      generated: new Date("2026-09-24T10:30:00Z"),
+      sections: [{ heading: "h", swatches: [{ label: "x", color: '"><script>' }] }],
+    });
+    expect(html).not.toContain("<script>");
+  });
+});
