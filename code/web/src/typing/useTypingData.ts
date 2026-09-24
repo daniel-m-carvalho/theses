@@ -4,25 +4,37 @@
  * **Only for what is displayed.** A slice shows tens of leaves out of tens of
  * thousands, and the composition of the rest is not needed to draw it — so the
  * request carries the visible sequence types and nothing else. This is the
- * same bargain the tree slicing makes, applied to the metadata: fetch what is
- * on screen, not what exists.
+ * bargain the tree slicing already makes, applied to the metadata.
  *
- * Refetched when the slice changes, because a different slice shows different
- * leaves.
+ * **More than one column can be shown at once**, and the segments are merged
+ * into one bar (user's choice, 2026-09-24). That has a consequence worth being
+ * explicit about rather than hiding: the backend segments by one column per
+ * request, and every isolate appears in every column, so an isolate is counted
+ * once *per selected column*. Two columns make a leaf's bar twice as long as
+ * its isolate count. Bar lengths therefore stay comparable **between leaves**
+ * but no longer read as "how many isolates"; `inflation` carries the factor so
+ * the legend and tooltips can say so.
  */
 
 import { useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "../api/client";
-import type { LeafComposition } from "../api/types";
+import type { LeafComposition, ValueCount } from "../api/types";
 import type { SliceTree } from "../tree/fromSlice";
 
+/** "Not recorded" as one category, whatever the export wrote. */
+export const UNRECORDED = "(not recorded)";
+
 export interface TypingData {
-  /** Segment breakdown by leaf label, for the library's data provider. */
+  /** Merged segments by leaf label, ready for the library's bar charts. */
   byLeaf: Map<string, LeafComposition>;
-  /** Every category present, so a legend can be drawn before any bar is. */
+  /** Every category present, so a legend is complete before a bar is drawn. */
   categories: string[];
-  segmentBy: string;
+  /** The columns currently shown. */
+  segmentKeys: string[];
+  /** Every column that can segment. */
   keys: string[];
+  /** How many times each isolate is counted — one per selected column. */
+  inflation: number;
   loading: boolean;
   error: string | null;
 }
@@ -30,37 +42,34 @@ export interface TypingData {
 const EMPTY: TypingData = {
   byLeaf: new Map(),
   categories: [],
-  segmentBy: "",
+  segmentKeys: [],
   keys: [],
+  inflation: 1,
   loading: false,
   error: null,
 };
 
-/** "Not recorded" as one category, whatever the export wrote. */
-export const UNRECORDED = "";
-
 /**
- * A composition as the library's bar charts want it, or nothing.
+ * The key a segment is coloured by.
  *
- * Two things this is careful about, both learned from the legend it feeds:
- *
- * **A leaf with no segments gets no datum.** Given one, `datumSegments` falls
- * back to keying the bar by the *leaf identifier*, so leaves with no typing
- * data at all turned into their own colour categories — the legend listed
- * sequence types 582 and 9102 as values of "Source Niche".
- *
- * **Null and blank collapse to one key.** The export writes both for "not
- * recorded"; left alone they became two identically-labelled swatches in
- * different colours.
+ * Qualified by its column when more than one is shown, because values collide
+ * across columns — "Environment" is both a Source Niche and a Source Type, and
+ * merging them into one swatch would claim they are the same thing. With a
+ * single column the prefix is noise, so it is left off.
  */
+function segmentKey(column: string, value: string, qualify: boolean): string {
+  const name = value || UNRECORDED;
+  return qualify ? `${column}: ${name}` : name;
+}
+
 export function datumFor(composition: LeafComposition | undefined) {
   if (!composition || composition.total <= 0) return undefined;
   const segments = composition.segments
     .filter((segment) => segment.count > 0)
-    .map((segment) => ({
-      key: typeof segment.value === "string" && segment.value ? segment.value : UNRECORDED,
-      value: segment.count,
-    }));
+    .map((segment) => ({ key: segment.value, value: segment.count }));
+  // A leaf with no segments gets no datum: handed one, the library falls back
+  // to keying the bar by the *leaf identifier*, which turned sequence types
+  // into colour categories of their own.
   if (segments.length === 0) return undefined;
   return { total: composition.total, segments };
 }
@@ -77,54 +86,89 @@ export function displayedLeafLabels(tree: SliceTree | null): string[] {
   return labels;
 }
 
+/** Combine one response per column into a single composition per leaf. */
+export function mergeColumns(
+  responses: { column: string; leaves: LeafComposition[] }[],
+): Map<string, LeafComposition> {
+  const qualify = responses.length > 1;
+  const merged = new Map<string, LeafComposition>();
+
+  for (const { column, leaves } of responses) {
+    for (const leaf of leaves) {
+      const existing = merged.get(leaf.leaf);
+      const segments: ValueCount[] = leaf.segments
+        .filter((segment) => segment.count > 0)
+        .map((segment) => ({
+          value: segmentKey(column, segment.value, qualify),
+          count: segment.count,
+        }));
+      if (!existing) {
+        merged.set(leaf.leaf, { ...leaf, segments });
+        continue;
+      }
+      merged.set(leaf.leaf, {
+        leaf: leaf.leaf,
+        // Summed across columns, which is the inflation this returns openly.
+        total: existing.total + leaf.total,
+        available: Math.max(existing.available, leaf.available),
+        segments: [...existing.segments, ...segments],
+      });
+    }
+  }
+  return merged;
+}
+
 export function useTypingData(
   isolateSet: string | null,
   tree: SliceTree | null,
   enabled: boolean,
-  segmentBy: string | null,
+  segmentKeys: string[],
 ): TypingData {
   const [keys, setKeys] = useState<string[]>([]);
-  const [chosen, setChosen] = useState<string>("");
   const [byLeaf, setByLeaf] = useState<Map<string, LeafComposition>>(new Map());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const labels = useMemo(() => displayedLeafLabels(tree), [tree]);
   const labelKey = labels.join(",");
+  const columnKey = segmentKeys.join(",");
 
-  // Which columns can segment. Fetched once per isolate set, not per slice.
+  // Which columns can segment. Once per isolate set, not per slice.
   useEffect(() => {
     if (!enabled || !isolateSet) return;
     let live = true;
     api
       .isolateKeys(isolateSet)
       .then((info) => {
-        if (!live) return;
-        const segmentable = info.facets.filter((f) => f.segmentable).map((f) => f.name);
-        setKeys(segmentable);
-        setChosen((current) => current || segmentBy || segmentable[0] || "");
+        if (live) setKeys(info.facets.filter((f) => f.segmentable).map((f) => f.name));
       })
       .catch(() => live && setKeys([]));
     return () => {
       live = false;
     };
-  }, [enabled, isolateSet, segmentBy]);
-
-  const active = segmentBy || chosen;
+  }, [enabled, isolateSet]);
 
   useEffect(() => {
-    if (!enabled || !isolateSet || !active || labels.length === 0) {
+    if (!enabled || !isolateSet || segmentKeys.length === 0 || labels.length === 0) {
       setByLeaf(new Map());
       return;
     }
     let live = true;
     setLoading(true);
     setError(null);
-    api
-      .compositions(isolateSet, { leaves: labels, segment_by: active })
-      .then((response) => {
+    // One request per column: the API segments by a single column at a time,
+    // which is the right shape for it — the merging is a presentation choice
+    // and belongs here.
+    Promise.all(
+      segmentKeys.map((column) =>
+        api
+          .compositions(isolateSet, { leaves: labels, segment_by: column })
+          .then((response) => ({ column, leaves: response.leaves })),
+      ),
+    )
+      .then((responses) => {
         if (!live) return;
-        setByLeaf(new Map(response.leaves.map((leaf) => [leaf.leaf, leaf])));
+        setByLeaf(mergeColumns(responses));
         setLoading(false);
       })
       .catch((failed: unknown) => {
@@ -135,30 +179,34 @@ export function useTypingData(
     return () => {
       live = false;
     };
-  }, [enabled, isolateSet, active, labelKey, labels]);
+  }, [enabled, isolateSet, columnKey, labelKey, labels, segmentKeys]);
 
   const categories = useMemo(() => {
     const seen = new Set<string>();
     for (const composition of byLeaf.values()) {
       for (const segment of composition.segments) {
-        // Blank and null are "not recorded". They are kept as a category
-        // because the isolates behind them are real and counted, but they are
-        // normalised to one key so the legend does not show two.
-        if (segment.count > 0) {
-          seen.add(
-            typeof segment.value === "string" && segment.value ? segment.value : UNRECORDED,
-          );
-        }
+        if (segment.count > 0) seen.add(segment.value);
       }
     }
     return [...seen].sort((a, b) => a.localeCompare(b));
   }, [byLeaf]);
 
-  // Memoised because consumers put this in effect dependencies. Returning a
-  // fresh object every render made such an effect run every render, and one
-  // that also set state looped until the page died.
+  // Memoised: consumers put this in effect dependencies, and a fresh object
+  // every render made such an effect run every render — one that also set
+  // state looped until the page died.
   return useMemo(
-    () => (enabled ? { byLeaf, categories, segmentBy: active, keys, loading, error } : EMPTY),
-    [enabled, byLeaf, categories, active, keys, loading, error],
+    () =>
+      enabled
+        ? {
+            byLeaf,
+            categories,
+            segmentKeys,
+            keys,
+            inflation: Math.max(1, segmentKeys.length),
+            loading,
+            error,
+          }
+        : EMPTY,
+    [enabled, byLeaf, categories, segmentKeys, keys, loading, error],
   );
 }

@@ -161,9 +161,17 @@ export function ComparisonView({
   const [left, leftActions] = useSide(pair.left, pair.id, "rf", initial?.left, autoBudget);
   const [right, rightActions] = useSide(pair.right, pair.id, "rf", initial?.right, autoBudget);
 
-  const [segmentBy, setSegmentBy] = useState<string | null>(null);
-  const leftTyping = useTypingData(isolateSets[0], left.tree, showTyping, segmentBy);
-  const rightTyping = useTypingData(isolateSets[1], right.tree, showTyping, segmentBy);
+  // Which typing columns to show. Several at once is allowed; see
+  // `useTypingData` for what that does to a bar's length.
+  const [segmentKeys, setSegmentKeys] = useState<string[]>([]);
+  const leftTyping = useTypingData(isolateSets[0], left.tree, showTyping, segmentKeys);
+  const rightTyping = useTypingData(isolateSets[1], right.tree, showTyping, segmentKeys);
+
+  // Start on the first column the store offers, once it is known.
+  const offered = leftTyping.keys.length ? leftTyping.keys : rightTyping.keys;
+  useEffect(() => {
+    if (segmentKeys.length === 0 && offered.length > 0) setSegmentKeys([offered[0]]);
+  }, [offered, segmentKeys]);
   const typing = useRef([leftTyping, rightTyping]);
   typing.current = [leftTyping, rightTyping];
   const [swatches, setSwatches] = useState<ReadonlyMap<string, string>>(new Map());
@@ -421,9 +429,10 @@ export function ComparisonView({
       {showTyping ? (
         <TypingLegend
           assignments={swatches}
-          segmentBy={leftTyping.segmentBy || rightTyping.segmentBy}
-          keys={leftTyping.keys.length ? leftTyping.keys : rightTyping.keys}
-          onSegmentBy={setSegmentBy}
+          segmentKeys={segmentKeys}
+          keys={offered}
+          onSegmentKeys={setSegmentKeys}
+          inflation={Math.max(leftTyping.inflation, rightTyping.inflation)}
           loading={leftTyping.loading || rightTyping.loading}
           error={leftTyping.error ?? rightTyping.error}
         />

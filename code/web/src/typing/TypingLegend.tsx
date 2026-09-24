@@ -1,9 +1,9 @@
 /**
- * What the bar colours mean.
+ * What the bar colours mean, and which typing columns they come from.
  *
  * One legend for both panels, not one each: the colour scale is shared, so two
- * would be the same list twice — and the library's own demo learned that the
- * hard way, with duplicate ramps floating over the leaf labels.
+ * would be the same list twice — the library's own demo learned that, with
+ * duplicate ramps floating over the leaf labels.
  *
  * Categories are read from the scale itself rather than from the data, because
  * the scale is what assigns the colours; deriving them separately is how a
@@ -12,55 +12,79 @@
 
 export function TypingLegend({
   assignments,
-  segmentBy,
+  segmentKeys,
   keys,
-  onSegmentBy,
+  onSegmentKeys,
+  inflation,
   loading,
   error,
 }: {
   assignments: ReadonlyMap<string, string>;
-  segmentBy: string;
+  segmentKeys: string[];
   keys: string[];
-  onSegmentBy: (key: string) => void;
+  onSegmentKeys: (keys: string[]) => void;
+  inflation: number;
   loading: boolean;
   error: string | null;
 }) {
-  // Null-safe: a category key can be null or blank where the export recorded
-  // nothing, and those isolates are kept rather than dropped — so the key
-  // reaches the colour scale and, from there, this list.
   const entries = [...assignments.entries()].sort(([a], [b]) =>
     String(a ?? "").localeCompare(String(b ?? "")),
   );
 
+  const toggle = (key: string) => {
+    const next = segmentKeys.includes(key)
+      ? segmentKeys.filter((candidate) => candidate !== key)
+      : [...segmentKeys, key];
+    onSegmentKeys(next);
+  };
+
   return (
     <footer className="typing-legend">
       <div className="legend-head">
-        <label>
-          Colour by
-          <select value={segmentBy} onChange={(event) => onSegmentBy(event.target.value)}>
-            {keys.map((key) => (
-              <option key={key} value={key}>
-                {key}
-              </option>
-            ))}
-          </select>
-        </label>
+        <span className="legend-label">Colour by</span>
+        <div className="legend-keys">
+          {keys.map((key) => (
+            <label key={key} className={segmentKeys.includes(key) ? "key on" : "key"}>
+              <input
+                type="checkbox"
+                checked={segmentKeys.includes(key)}
+                onChange={() => toggle(key)}
+              />
+              {key}
+            </label>
+          ))}
+        </div>
         {loading ? <span className="legend-note">loading…</span> : null}
         {error ? <span className="legend-note error">{error}</span> : null}
-        {!loading && !error && entries.length === 0 ? (
-          <span className="legend-note">
-            No typing data for the leaves on screen.
-          </span>
-        ) : null}
       </div>
+
+      {/*
+        Stated rather than left to be discovered. Every isolate appears in
+        every column, so showing two columns counts each one twice and a bar
+        is twice as long as the leaf's isolate count. Lengths stay comparable
+        between leaves; they just stop meaning "isolates".
+      */}
+      {inflation > 1 ? (
+        <p className="legend-warning">
+          {inflation} columns shown, so each isolate is counted {inflation} times:
+          bar lengths are {inflation}× the isolate count. They remain comparable
+          between leaves.
+        </p>
+      ) : null}
+
+      {!loading && !error && entries.length === 0 ? (
+        <p className="legend-note">
+          {segmentKeys.length === 0
+            ? "Choose a column to colour by."
+            : "No typing data for the leaves on screen."}
+        </p>
+      ) : null}
 
       <ul className="legend-swatches">
         {entries.map(([value, color]) => (
           <li key={value}>
             <span className="swatch" style={{ background: color }} aria-hidden="true" />
-            {/* Blank values are kept as isolates but form no segment, so a
-                blank swatch here would be a category that never appears. */}
-            {value || "(not recorded)"}
+            {value}
           </li>
         ))}
       </ul>
