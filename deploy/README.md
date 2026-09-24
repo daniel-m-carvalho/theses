@@ -6,9 +6,15 @@ docker compose up --build
 
 | | |
 |---|---|
+| **the app** | <http://localhost:8080> |
 | API | <http://localhost:8001/api/v1/datasets> |
 | API docs | <http://localhost:8001/docs> |
-| demo | <http://localhost:3001> |
+| `lib_demo` (frozen, static files) | <http://localhost:3001> |
+
+Five services: `phylodelta-seed` (builds the example catalogue once, then
+exits), `phylodelta-service` (the API), `phylodelta-worker` (computes uploads),
+`phylodelta-web` (the frontend, which proxies `/api/v1/` to the API) and
+`phylodelta-demo`.
 
 ## The example catalogue builds itself, once
 
@@ -29,6 +35,9 @@ without `--if-empty` it rebuilds regardless:
 docker compose run --rm phylodelta-service phylodelta build-all
 ```
 
+The runtime image has no `uv`: the venv is on `PATH`, so commands are
+`phylodelta ...`, not `uv run phylodelta ...`.
+
 To start over completely, delete the volume:
 
 ```sh
@@ -45,24 +54,46 @@ docker compose run --rm phylodelta-service phylodelta ingest-isolates
 
 ## Ports
 
-`8001` and `3001` on the host; `8000` and `80` inside. Override with
-`PHYLODELTA_PORT` and `PHYLODELTA_DEMO_PORT`.
+`8080`, `8001` and `3001` on the host; `80`, `8000` and `80` inside. Override
+with `PHYLODELTA_WEB_PORT`, `PHYLODELTA_PORT` and `PHYLODELTA_DEMO_PORT`, in the
+environment or in a `.env` file next to `docker-compose.yml`.
 
-The demo proxies `/api/v1/` to the service, so the browser, the API and the page
-share one origin and no CORS configuration is involved.
+Only `8080` is needed by a browser: the web container proxies `/api/v1/` to the
+service, so the page and the API share one origin and no CORS configuration is
+involved.
 
-## Two things this deployment does not yet do
+## On the university VM
 
-**The demo does not use the API.** `lib_demo` was written before the backend
-existed and reads its trees from files it bundles. The proxy is wired and ready,
-but until a frontend is written against the slicing API the two containers are
-independent. See [DECISIONS.md](../DECISIONS.md) — `lib_demo` is deliberately frozen.
+Authentication is `mock` by default: every request is the same user, and
+**anyone who can reach the port can upload and delete**. That is acceptable on
+a VM reachable only from the university network or through an SSH tunnel; it is
+not acceptable on the open internet. See `PHYLODELTA_AUTH=jwt` in
+`docker-compose.yml`.
 
-**Nothing computes on request.** Every API request is a memory-mapped read;
-comparisons are precomputed by `build-all`. If users are to upload their own
-trees, a comparison becomes minutes of work on the request path, which needs a
-job queue and a status endpoint that do not exist. `proxy_read_timeout 600s` is
-a stopgap for that, not a solution.
+Set `PHYLODELTA_THREADS` to a number on a shared machine — `0` takes every core.
+
+Deploying a new version:
+
+```sh
+git pull
+docker compose up -d --build
+```
+
+The store lives on the `phylodelta-data` volume and survives this. Only
+`docker compose down -v` deletes it.
+
+## The native extension is built in the image
+
+`native/build.sh` compiles with whatever C++ compiler is present (`g++` in the
+builder), so the image gets the 17x faster parser and 5.5x faster
+correspondence search. Check it with:
+
+```sh
+docker compose exec phylodelta-service ls /app/native   # expect phylodelta_native*.so
+```
+
+If the compile fails the build still succeeds on the Python path — look for
+`native extension unavailable` in the build output.
 
 ## Subprocess metrics
 

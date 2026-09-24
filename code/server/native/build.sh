@@ -33,10 +33,22 @@ PYBIND_INCLUDE=$(uv run python -c "import pybind11; print(pybind11.get_include()
 PYTHON_INCLUDE=$(uv run python -c "import sysconfig; print(sysconfig.get_paths()['include'])")
 EXT_SUFFIX=$(uv run python -c "import sysconfig; print(sysconfig.get_config_var('EXT_SUFFIX'))")
 
+# Whatever C++ compiler the machine has: clang++ on macOS, g++ in the Docker
+# builder. It used to say clang++ outright, and the image has no clang, so the
+# build failed inside `|| echo` and every container ran the Python path.
+CXX="${CXX:-c++}"
+
 # -undefined dynamic_lookup: the extension resolves Python symbols against the
 # interpreter that loads it, rather than linking libpython. Standard for macOS
-# extension modules and what lets one build serve any matching interpreter.
-clang++ -O3 -Wall -std=c++17 -shared -undefined dynamic_lookup -fPIC \
+# extension modules. It is a macOS linker flag; on Linux, unresolved symbols in
+# a shared object are already allowed and GNU ld rejects the flag.
+PLATFORM_FLAGS=()
+if [ "$(uname -s)" = "Darwin" ]; then
+  PLATFORM_FLAGS=(-undefined dynamic_lookup)
+fi
+
+# -pthread: the correspondence search runs a thread pool.
+"$CXX" -O3 -Wall -std=c++17 -shared -fPIC -pthread "${PLATFORM_FLAGS[@]}" \
   -I"$PYBIND_INCLUDE" \
   -I"$PYTHON_INCLUDE" \
   -I"$HERE/sdsl-lite/include" \

@@ -10,7 +10,7 @@ services:
     image: phylodelta-service:local
     build:
       context: ./code/server
-    command: ["uv", "run", "phylodelta", "build-all", "--if-empty"]
+    command: ["phylodelta", "build-all", "--if-empty"]
     restart: "no"
     environment:
       PHYLODELTA_STORE: /data/store
@@ -93,7 +93,7 @@ services:
     build:
       context: ./code/server
     restart: unless-stopped
-    command: ["uv", "run", "phylodelta", "worker"]
+    command: ["phylodelta", "worker"]
     environment:
       PHYLODELTA_STORE: /data/store
       PHYLODELTA_DATASETS: /data/datasets
@@ -107,6 +107,20 @@ services:
     depends_on:
       phylodelta-seed:
         condition: service_completed_successfully
+      phylodelta-service:
+        condition: service_healthy
+
+  # The thesis frontend. Its nginx proxies /api/v1/ to phylodelta-service, so
+  # this one port is all a browser needs.
+  phylodelta-web:
+    build:
+      # The workspace root, for the same reason as the demo below.
+      context: ./code
+      dockerfile: web/Dockerfile
+    ports:
+      - "${PHYLODELTA_WEB_PORT:-8080}:80"
+    restart: unless-stopped
+    depends_on:
       phylodelta-service:
         condition: service_healthy
 

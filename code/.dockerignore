@@ -1,0 +1,9 @@
+# The Node images build from code/ (the npm workspace root), so this file
+# governs them. Installed or built output never belongs in a build context,
+# and the backend is built from its own directory with its own ignore file.
+**/node_modules/
+**/dist/
+**/.vite/
+**/.DS_Store
+server/
+bench/results/
