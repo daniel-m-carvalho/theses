@@ -64,6 +64,13 @@ export interface ComparisonView {
   legend?: ReportSwatch[];
   /** The two ends of the divergence scale, as drawn. */
   gradientEnds?: { identical: string; diverged: string };
+  /**
+   * Label and colour for branches drawn with no value, when the view had any.
+   *
+   * Omitting it when the panels contained such branches leaves the reader a
+   * picture with three appearances and a key for two.
+   */
+  absent?: { label: string; color: string };
 }
 
 export interface ComparisonReportInput {
@@ -185,10 +192,17 @@ function viewSetup(view: ComparisonView): Report["sections"][number] {
         color: view.gradientEnds?.identical ?? "#1d4ed8",
       },
       {
-        label: "diverged — no counterpart in the other tree",
+        label: "diverged — shares few leaves with its best match",
         color: view.gradientEnds?.diverged ?? "#ffd400",
       },
     );
+    if (view.absent) {
+      body.push(
+        "Branches left in the tree's own colour carry no value: the metric had " +
+          "nothing to say about them, which is not the same as a score of zero.",
+      );
+      swatches.push({ label: view.absent.label, color: view.absent.color });
+    }
   } else {
     body.push("Divergence colouring was off: branch colour carries no meaning here.");
   }

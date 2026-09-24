@@ -138,6 +138,9 @@ export interface ComparisonConfig {
   /** Gradient mode: also color node markers (default false — branches only). */
   colorNodes?: boolean;
   leafColor?: string;
+  /** Legend row for branches the backend gave no value for. Unset = no row. */
+  absentLabel?: string;
+  absentColor?: string;
   equalColor?: string;
   markerSize?: number;
   /** Times a located node flashes before the highlight goes (default 3). */
@@ -401,6 +404,8 @@ function buildPanel(
       edgeWidth: c.edgeWidth,
       colorNodes: c.colorNodes,
       leafColor: c.leafColor,
+      absentLabel: c.absentLabel,
+      absentColor: c.absentColor,
       equalColor: c.equalColor,
       markerSize: c.markerSize,
       flashes: c.flashes,

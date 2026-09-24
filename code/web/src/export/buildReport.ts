@@ -29,6 +29,8 @@ export interface ReportInput {
   swatches?: ReadonlyMap<string, string>;
   /** The two ends of the divergence scale, as drawn. */
   gradientEnds?: { identical: string; diverged: string };
+  /** Set when the panels held branches with no value at all. */
+  absent?: { label: string; color: string };
 }
 
 export function toReportInput(input: ReportInput): ComparisonReportInput {
@@ -56,6 +58,7 @@ export function toReportInput(input: ReportInput): ComparisonReportInput {
       typing: input.typing ?? null,
       legend: [...(input.swatches ?? [])].map(([label, color]) => ({ label, color })),
       gradientEnds: input.gradientEnds,
+      absent: input.absent,
     },
     footnotes: [
       // The one caveat the library cannot know: these numbers came from a

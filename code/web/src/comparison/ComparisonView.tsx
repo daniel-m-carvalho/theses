@@ -120,6 +120,24 @@ function wedgeColorFrom(scale: SequentialColorScale) {
  */
 const ARRIVAL_FLASHES = 5;
 
+/**
+ * What a branch with no value at all is called, and the colour it is drawn in.
+ *
+ * A leaf reconciliation dropped has no counterpart and therefore no
+ * similarity, so its branch keeps the tree's own black rather than a colour
+ * from the ramp. Right — inventing a mid-scale value would be a lie — but it
+ * puts a third colour on screen, and both the legend and the export have to
+ * name it. Across species it is most of a panel: clostridium-upgma against
+ * vibrio-nj shares 17,489 of 27,962 leaves, so 10,473 are drawn this way.
+ */
+const ABSENT_LABEL = "not in the other tree";
+const ABSENT_COLOR = "#000000";
+
+/** Whether a slice contains a node the backend gave no similarity for. */
+function hasUnvalued(slice: { comparison?: { similarity: (number | null)[] } | null } | null) {
+  return (slice?.comparison?.similarity ?? []).some((value) => value === null);
+}
+
 const CONFIG: Config = {
   panels: [
     {
@@ -163,6 +181,16 @@ const CONFIG: Config = {
     flashes: ARRIVAL_FLASHES,
     legend: true,
     legendLabels: ["identical", "diverged"],
+    /*
+     * The third thing on screen. A leaf reconciliation dropped has no
+     * counterpart and therefore no similarity, so its branch keeps the tree's
+     * own black rather than a colour from the ramp — right, because inventing
+     * a mid-scale value would be a lie, but it leaves a colour the legend does
+     * not explain. Across species that is most of a panel: clostridium-upgma
+     * against vibrio-nj shares 17,489 of 27,962 leaves, so 10,473 are drawn
+     * this way.
+     */
+    absentLabel: ABSENT_LABEL,
   },
   /**
    * Panels are NOT linked.
@@ -605,6 +633,13 @@ export function ComparisonView({
               identical: DIFF_PALETTE[0],
               diverged: DIFF_PALETTE[DIFF_PALETTE.length - 1],
             },
+            // Only when the panels actually held such branches, so a report of
+            // two closely related trees is not told about a case it does not
+            // contain — the same rule the on-screen legend follows.
+            absent:
+              options.gradient && [left.slice, right.slice].some(hasUnvalued)
+                ? { label: ABSENT_LABEL, color: ABSENT_COLOR }
+                : undefined,
           },
           `${choices.title.replace(/[^\w.-]+/g, "-").toLowerCase()}.html`,
         );

@@ -151,6 +151,34 @@ describe("right-clicking a node", () => {
     expect(rightAct.focus).not.toHaveBeenCalled();
   });
 
+  it("answers when a leaf has no counterpart, rather than greying out", () => {
+    // "Not in the other tree" is the result of asking, not a reason the
+    // question cannot be put — and a greyed-out item leaves the reader to work
+    // out which of the two it is. Across species this is most of a panel.
+    const base = sideOf();
+    const left: SideState = {
+      ...base,
+      gradient: { similarityOf: () => undefined, correspondingTo: () => undefined },
+    };
+    const right = sideOf({ treeId: "vibrio-upgma" });
+    const rightAct = actions();
+    const leaf = [...base.tree!.leaves][0];
+
+    const items = buildMenu(
+      { side: 0, at, storedId: leaf },
+      [left, right],
+      [actions(), rightAct],
+    );
+    const jump = by(items, "Find this leaf in the other tree");
+    expect(jump.disabledBecause).toBeUndefined();
+
+    jump.onSelect!();
+    expect(rightAct.reportJumpFailure).toHaveBeenCalled();
+    expect(rightAct.calls[0]).toMatch(/is not in vibrio-upgma/);
+    // And nothing moved, because there is nowhere to move to.
+    expect(rightAct.focusWithContext).not.toHaveBeenCalled();
+  });
+
   it("refuses to locate a clade, because that match is only an approximation", () => {
     // A clade is matched by best leaf overlap, so the "corresponding" clade may
     // share most of its leaves or almost none. Offering the jump would present

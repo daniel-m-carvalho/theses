@@ -111,13 +111,24 @@ export function buildMenu(
       label: "Find this leaf in the other tree",
       detail:
         partner !== undefined ? `shows its clade in ${there.treeId}` : undefined,
+      // Only a clade is refused outright, because for a clade the action is
+      // the wrong tool. A leaf with no counterpart stays clickable and answers
+      // when clicked: "this leaf is not in the other tree" is the result of
+      // asking, not a reason the question cannot be put, and a greyed-out item
+      // makes the reader work out which of the two it is.
       disabledBecause: !isLeaf
         ? "only leaves can be located exactly; a clade is matched by overlap"
+        : undefined,
+      onSelect: !isLeaf
+        ? undefined
         : partner === undefined
-          ? "this leaf is not in the other tree"
-          : undefined,
-      onSelect:
-        partner === undefined ? undefined : () => actThere.focusWithContext(partner),
+          ? () =>
+              actThere.reportJumpFailure(
+                `${here.tree?.byStoredId.get(storedId)?.name ?? "That leaf"} is not in ` +
+                  `${there.treeId}. The two trees were reconciled to the leaves they ` +
+                  `share, and this one is not among them.`,
+              )
+          : () => actThere.focusWithContext(partner),
     });
   }
 

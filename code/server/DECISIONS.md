@@ -2920,6 +2920,37 @@ which on a freshly fitted twenty-leaf subtree crops the surrounding structure �
 the widening exists to provide. `highlightByKey(key, { center: false })` blinks in place; the panel
 was just re-rooted around the node, so it is on screen already.
 
+### 27.4d The third colour, and the leaf that is simply not there
+
+A user asked why some branches were black. They were right to ask, and nothing was wrong with the
+drawing: a leaf reconciliation dropped has **no counterpart**, so it has no similarity, and the
+comparison operator leaves it exactly as the tree drew it. That rule is deliberate and tested —
+absent data must look absent, never a fabricated mid-scale colour. Verified on the pair in question:
+all eleven black leaves had `similarity = NaN` and were absent from the other tree; all nine
+coloured ones scored 1.000 and were present.
+
+What was wrong is that **the legend ran "identical → diverged" and never mentioned black**, leaving
+a picture with three appearances and a key for two. Across species that is most of a panel:
+clostridium-upgma against vibrio-nj shares 17,489 of 27,962 leaves, so 10,473 are drawn this way.
+
+So the gradient legend gains an optional `absentLabel` row, and the export's colour key gains the
+matching swatch. Both appear **only when such a branch is actually on screen**, so a pair of closely
+related trees is not told about a case it does not contain — confirmed in the browser, where the
+clostridium panel showed the row and the vibrio panel did not. The operator decides this by walking
+the layout it is showing rather than by noticing absences while colouring: a reducer runs only when
+the renderer asks it to, so a legend driven by that side effect describes whatever happened to be
+drawn last.
+
+The same finding renamed a legend entry in the export. "diverged — no counterpart in the other tree"
+was wrong twice over once black exists, since *that* is what having no counterpart looks like; the
+yellow end means "shares few leaves with its best match".
+
+**And the menu now answers instead of greying out.** "Find this leaf in the other tree" stays
+clickable for a leaf with no counterpart and reports it: *not in the other tree* is the result of
+asking, not a reason the question cannot be put, and a disabled item leaves the reader to work out
+which of the two it is. A clade is still refused outright, because there the action is the wrong
+tool (§27.1).
+
 ### 27.5 The sweep
 
 `tools/validate_navigation.py` drives the real route functions — not a
