@@ -314,17 +314,23 @@ export function ComparisonView({
         }`;
       },
       /**
-       * The node carries its own value.
+       * **Divergence**, which is 1 − similarity.
        *
-       * Keying by name would break on the unnamed internal nodes that make up
-       * most of a slice; keying by stored id is worse, because an id is a
-       * pre-order index *within one tree* and the two trees' ranges overlap —
-       * a lookup that tried one side and fell back to the other could paint a
-       * panel with the other tree's numbers.
+       * The backend reports `similarity`: the overlap with the best matching
+       * clade in the other tree, where 1.0 means identical. The scale runs
+       * blue to yellow and is labelled "identical" to "diverged", so feeding
+       * it similarity drew every shared clade at the diverged end — a leaf
+       * present in both trees scores 1.0 and came out the colour reserved for
+       * "no counterpart at all".
+       *
+       * The node carries its own value rather than being looked up by id: an
+       * id is a pre-order index *within one tree*, and the two trees' ranges
+       * overlap, so a lookup could paint a panel with the other tree's
+       * numbers.
        */
       valueFor: (_key: string, node) => {
-        const value = node.metadata?.similarity;
-        return typeof value === "number" ? value : undefined;
+        const similarity = node.metadata?.similarity;
+        return typeof similarity === "number" ? 1 - similarity : undefined;
       },
     });
     handle.current = built;
