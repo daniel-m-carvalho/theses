@@ -241,6 +241,8 @@ export interface ViewerHandle {
    * `colorScale.assignments()`; `prime()` it up front for a complete legend.
    */
   colorScale: CategoricalColorScale;
+  /** The sequential scale this panel's comparison operator colors with. */
+  diffScale: SequentialColorScale;
   destroy(): void;
 }
 
@@ -248,6 +250,13 @@ export interface ComparisonHandle {
   panels: ViewerHandle[];
   /** The categorical scale shared by every panel, so colors agree across them. */
   colorScale: CategoricalColorScale;
+  /**
+   * The sequential scale the comparison operators color with, and that their
+   * legend is drawn from. Exposed so a caller can paint something the operator
+   * does not reach — a clade wedge, a table of values — in the *same* ramp;
+   * building a second scale here would agree only by coincidence.
+   */
+  diffScale: SequentialColorScale;
   destroy(): void;
 }
 
@@ -412,6 +421,7 @@ function buildPanel(
     viewer,
     operators,
     colorScale: shared.colorScale,
+    diffScale: shared.diffScale,
     destroy() {
       unsub.forEach((u) => u());
       operators.comparison?.detach();
@@ -506,6 +516,7 @@ export function createComparison(
   return {
     panels,
     colorScale: shared.colorScale,
+    diffScale: shared.diffScale,
     destroy() {
       panels.forEach((p) => p.destroy());
     },
@@ -550,6 +561,7 @@ export function createFromConfig(
   return {
     panels: [handle],
     colorScale: handle.colorScale,
+    diffScale: handle.diffScale,
     destroy: () => handle.destroy(),
   };
 }

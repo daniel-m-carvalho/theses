@@ -47,8 +47,14 @@ export interface ComparisonReconciliation {
 }
 
 export interface ComparisonView {
-  /** Whether branches were coloured by divergence. */
+  /** Whether divergence colouring was on at all. */
   gradient: boolean;
+  /**
+   * Where that colour was drawn — on the branch into each clade, or on the
+   * collapsed clade's own wedge. The reader is looking at a picture and cannot
+   * tell which carries the value, so the report has to say.
+   */
+  gradientOn?: "branches" | "clades";
   /** Per-leaf bars, when shown. */
   typing?: {
     columns: string[];
@@ -168,7 +174,11 @@ function viewSetup(view: ComparisonView): Report["sections"][number] {
   const swatches: ReportSwatch[] = [];
 
   if (view.gradient) {
-    body.push("Branches are coloured by how much the two trees disagree at that clade.");
+    body.push(
+      view.gradientOn === "clades"
+        ? "Each collapsed clade's wedge is coloured by how much the two trees disagree at that clade. Branch colour carries no meaning here."
+        : "Branches are coloured by how much the two trees disagree at the clade they lead into.",
+    );
     swatches.push(
       {
         label: "identical — the same clade in both trees",

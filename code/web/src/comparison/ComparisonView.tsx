@@ -20,8 +20,10 @@ import {
   type BarScale,
   type ComparisonHandle,
   type Config,
+  type SequentialColorScale,
 } from "phylo-tree-viewer";
 import type { ComparisonSummary, PairSummary } from "../api/types";
+import type { ColorTarget } from "./colorTarget";
 import { exportReport } from "../export/buildReport";
 import { ExportPanel, type ExportChoices } from "../export/ExportPanel";
 import { ContextMenu } from "../menu/ContextMenu";
@@ -89,6 +91,23 @@ const CLADE_SHAPE = {
   maxHalfHeight: PIXELS_PER_LEAF * 0.42,
 } as const;
 
+/**
+ * Divergence as a wedge colour, for the "clades" colour target.
+ *
+ * Takes the handle's own scale rather than building one: the branches, the
+ * legend and the export's colour key all read that instance, and a second
+ * would agree with it only by coincidence.
+ *
+ * Reads the clade's own value rather than looking one up: ids are per-tree
+ * pre-order indices and the two trees' ranges overlap (see `valueFor`).
+ */
+function wedgeColorFrom(scale: SequentialColorScale) {
+  return (node: { metadata?: Record<string, unknown> }): string | undefined => {
+    const similarity = node.metadata?.similarity;
+    return typeof similarity === "number" ? scale.color(1 - similarity) : undefined;
+  };
+}
+
 const CONFIG: Config = {
   panels: [
     {
@@ -122,11 +141,12 @@ const CONFIG: Config = {
     mode: "gradient",
     keyBy: "name",
     colorEdges: true,
-    // Edges only. The clade presenter already hides a collapsed node's circular
-    // marker so the wedge stands alone, and colouring markers put the ball
-    // straight back — every clade showed a coloured dot beside its triangle.
-    // The gradient reads on the branches, which is where a divergence between
-    // two topologies actually lives.
+    // Never the node markers. The clade presenter already hides a collapsed
+    // node's circular marker so the wedge stands alone, and colouring markers
+    // puts the ball straight back — every clade showed a coloured dot beside
+    // its triangle. The "clades" colour target paints the *wedge* instead
+    // (`setColor` on the presenter), which is the marker as far as the eye is
+    // concerned; `colorEdges` is what the switch moves.
     colorNodes: false,
     legend: true,
     legendLabels: ["identical", "diverged"],
@@ -172,6 +192,7 @@ export function ComparisonView({
   isolateSets = [null, null],
   showTyping = false,
   showGradient = true,
+  colorTarget = "branches",
   labelClades = false,
   summary = null,
   exporting = false,
@@ -184,6 +205,7 @@ export function ComparisonView({
   isolateSets?: [string | null, string | null];
   showTyping?: boolean;
   showGradient?: boolean;
+  colorTarget?: ColorTarget;
   labelClades?: boolean;
   /** The computed scalars, for the report. */
   summary?: ComparisonSummary | null;
@@ -407,6 +429,25 @@ export function ComparisonView({
     });
   }, [showGradient]);
 
+  // Move the gradient between the branches and the wedges. Both operators are
+  // involved because the wedge is not a Sigma node marker but an overlay the
+  // clade presenter draws, so the comparison operator cannot reach it; the
+  // switch turns one off as it turns the other on, and with the gradient off
+  // altogether the wedges go back to structural black.
+  useEffect(() => {
+    const built = handle.current;
+    if (!built) return;
+    const wedgeColor = wedgeColorFrom(built.diffScale);
+    built.panels.forEach((panel) => {
+      panel.operators.comparison?.setColorTargets({
+        edges: showGradient && colorTarget === "branches",
+      });
+      panel.operators.cladeShape?.setColor(
+        showGradient && colorTarget === "clades" ? wedgeColor : CLADE_SHAPE.color,
+      );
+    });
+  }, [showGradient, colorTarget]);
+
   // Feed the bar charts, and keep the legend in step with the scale that is
   // actually colouring them. The scale is primed with every category present
   // so the legend is complete before a bar for that category is drawn.
@@ -491,6 +532,7 @@ export function ComparisonView({
             showing: { left: showing(left), right: showing(right) },
             typing: showTyping ? { columns: segmentKeys, scale: barScale } : null,
             gradient: showGradient,
+            gradientOn: colorTarget,
             swatches: showTyping ? swatches : undefined,
             // The ends of the scale the operator actually draws with, rather
             // than colours named here that could drift from it.
@@ -517,6 +559,7 @@ export function ComparisonView({
       segmentKeys,
       barScale,
       showGradient,
+      colorTarget,
       swatches,
       onExportClose,
     ],

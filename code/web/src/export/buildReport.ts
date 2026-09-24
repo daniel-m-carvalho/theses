@@ -23,6 +23,8 @@ export interface ReportInput {
   showing: { left: string; right: string };
   typing?: { columns: string[]; scale: string } | null;
   gradient: boolean;
+  /** Which of the two the gradient was drawn on. */
+  gradientOn?: "branches" | "clades";
   /** Category colour assignments, so the report can name each one. */
   swatches?: ReadonlyMap<string, string>;
   /** The two ends of the divergence scale, as drawn. */
@@ -50,6 +52,7 @@ export function toReportInput(input: ReportInput): ComparisonReportInput {
     caution: summary?.caution ?? null,
     view: {
       gradient: input.gradient,
+      gradientOn: input.gradientOn,
       typing: input.typing ?? null,
       legend: [...(input.swatches ?? [])].map(([label, color]) => ({ label, color })),
       gradientEnds: input.gradientEnds,

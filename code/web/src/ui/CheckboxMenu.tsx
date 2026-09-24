@@ -13,7 +13,7 @@
  * whatever is behind. That cost an afternoon once.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 
 export interface CheckboxItem {
   key: string;
@@ -21,6 +21,14 @@ export interface CheckboxItem {
   checked: boolean;
   /** Shown smaller under the label. */
   note?: string;
+  /**
+   * Radio items with the same `group` are mutually exclusive, and clicking one
+   * that is already on does nothing — the menu still holds independent toggles
+   * alongside them, which is why this is per item rather than per menu.
+   */
+  group?: string;
+  /** A labelled rule above this item, separating it from what precedes it. */
+  heading?: string;
 }
 
 export function CheckboxMenu({
@@ -77,17 +85,21 @@ export function CheckboxMenu({
           aria-label={title ?? summary}
         >
           {items.map((item) => (
-            <label key={item.key}>
-              <input
-                type="checkbox"
-                checked={item.checked}
-                onChange={() => onToggle(item.key)}
-              />
-              <span>
-                {item.label}
-                {item.note ? <span className="menu-note">{item.note}</span> : null}
-              </span>
-            </label>
+            <Fragment key={item.key}>
+              {item.heading ? <span className="menu-heading">{item.heading}</span> : null}
+              <label>
+                <input
+                  type={item.group ? "radio" : "checkbox"}
+                  name={item.group}
+                  checked={item.checked}
+                  onChange={() => onToggle(item.key)}
+                />
+                <span>
+                  {item.label}
+                  {item.note ? <span className="menu-note">{item.note}</span> : null}
+                </span>
+              </label>
+            </Fragment>
           ))}
         </div>
       ) : null}

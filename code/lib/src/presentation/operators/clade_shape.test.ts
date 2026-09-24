@@ -144,3 +144,46 @@ describe("sizing wedges in a server-summarised view", () => {
     expect(at(400, 50)).toBeCloseTo(at(8_441, 50), 5);
   });
 });
+
+describe("colouring wedges by value", () => {
+  it("calls a colour function with the real clade, not the pruned clone", () => {
+    const h = makeHarness(binaryTree(5)); // 32 leaves
+    const seen: number[] = [];
+    new CladeShapePresenter({
+      color: (node) => {
+        seen.push(node.branchset?.length ?? 0);
+        return "#ff00ff";
+      },
+    }).attach(h.viewer);
+    h.viewer.setCollapseFn((n) => n === h.viewer.getTree()!.branchset![0]);
+    h.render();
+
+    // The clone has no children; only `origin` does. A zero here would mean the
+    // function cannot see the subtree it is supposed to describe.
+    expect(seen).toEqual([2]);
+    expect(wedges(h.container)[0].style.borderRight).toContain("rgb(255, 0, 255)");
+  });
+
+  it("falls back to the node's own colour when the function declines", () => {
+    const h = makeHarness(namedTree());
+    new CladeShapePresenter({ color: () => undefined }).attach(h.viewer);
+    h.viewer.setCollapseFn((n) => n.name === "b");
+    h.render();
+
+    const side = wedges(h.container)[0].style.borderRight;
+    expect(side).toBeTruthy();
+    expect(side).not.toContain("undefined");
+  });
+
+  it("redraws on setColor, since a presentation switch fires no render", () => {
+    const h = makeHarness(namedTree());
+    const shape = new CladeShapePresenter({ color: "#000000" });
+    shape.attach(h.viewer);
+    h.viewer.setCollapseFn((n) => n.name === "b");
+    h.render();
+    expect(wedges(h.container)[0].style.borderRight).toContain("rgb(0, 0, 0)");
+
+    shape.setColor(() => "#ffd400");
+    expect(wedges(h.container)[0].style.borderRight).toContain("rgb(255, 212, 0)");
+  });
+});

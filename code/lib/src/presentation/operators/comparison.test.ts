@@ -250,3 +250,34 @@ describe("ComparisonOperator — linking", () => {
     expect(() => a.highlightByKey("c")).not.toThrow();
   });
 });
+
+describe("moving the gradient between branches and markers", () => {
+  it("stops colouring branches when edges are switched off, without losing the values", () => {
+    const h = makeHarness(namedTree());
+    const cmp = new ComparisonOperator({
+      enabled: true,
+      values: new Map([["a", 0], ["c", 1]]),
+      keyOf: keyByName,
+      scale: new SequentialColorScale({ stops: ["#000000", "#ffffff"] }),
+    });
+    cmp.attach(h.viewer);
+    h.render();
+    const colored = h.edgeStyleOf("named_c")!.color;
+
+    cmp.setColorTargets({ edges: false });
+    expect(h.edgeStyleOf("named_c")!.color).not.toBe(colored);
+
+    // The operator was not disabled, only redirected: switching back restores
+    // the same colour rather than needing the values to be fed again.
+    cmp.setColorTargets({ edges: true });
+    expect(h.edgeStyleOf("named_c")!.color).toBe(colored);
+  });
+
+  it("reports what it is currently colouring, and leaves the other target alone", () => {
+    const cmp = new ComparisonOperator({ enabled: true });
+    expect(cmp.getColorTargets()).toEqual({ edges: true, nodes: false });
+
+    cmp.setColorTargets({ nodes: true });
+    expect(cmp.getColorTargets()).toEqual({ edges: true, nodes: true });
+  });
+});

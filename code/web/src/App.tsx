@@ -11,6 +11,7 @@ import { ComparisonView } from "./comparison/ComparisonView";
 import { UploadPanel } from "./upload/UploadPanel";
 import { CheckboxMenu } from "./ui/CheckboxMenu";
 import { useUrlState } from "./useUrlState";
+import { COLOR_TARGETS, type ColorTarget } from "./comparison/colorTarget";
 import type {
   ComparisonSummary,
   DatasetsResponse,
@@ -25,6 +26,7 @@ export function App() {
   const [showTyping, setShowTyping] = useState(false);
   // Divergence colouring is on by default: it is what the comparison is for.
   const [showGradient, setShowGradient] = useState(true);
+  const [colorTarget, setColorTarget] = useState<ColorTarget>("branches");
   const [labelClades, setLabelClades] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [view, setView] = useUrlState();
@@ -115,11 +117,26 @@ export function App() {
                 checked: labelClades,
                 note: "label every collapsed clade with its leaf count",
               },
+              // Where the gradient lands, not whether it is on — so the choice
+              // is offered only while there is one to place.
+              ...(showGradient
+                ? COLOR_TARGETS.map((target, index) => ({
+                    key: `colour:${target.key}`,
+                    label: target.label,
+                    checked: colorTarget === target.key,
+                    note: target.note,
+                    group: "colour-target",
+                    heading: index === 0 ? "Colour the divergence on" : undefined,
+                  }))
+                : []),
             ]}
             onToggle={(key) => {
               if (key === "gradient") setShowGradient((on) => !on);
               if (key === "typing") setShowTyping((on) => !on);
               if (key === "clades") setLabelClades((on) => !on);
+              if (key.startsWith("colour:")) {
+                setColorTarget(key.slice("colour:".length) as ColorTarget);
+              }
             }}
           />
         ) : null}
@@ -164,6 +181,7 @@ export function App() {
             isolateSets={isolateSetsFor(chosen, datasets)}
             showTyping={showTyping}
             showGradient={showGradient}
+            colorTarget={colorTarget}
             labelClades={labelClades}
             summary={summary}
             exporting={exporting}

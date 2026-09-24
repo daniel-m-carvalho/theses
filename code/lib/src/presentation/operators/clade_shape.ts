@@ -41,8 +41,15 @@ export interface CladeShapeOptions {
    * across *different* trees on a shared scale.
    */
   saturateAt?: number;
-  /** Override the wedge color. Default: the node's own color from the graph. */
-  color?: string;
+  /**
+   * Override the wedge color. Default: the node's own color from the graph.
+   *
+   * A **function** is called once per wedge with the clade it stands for (the
+   * real subtree, not the pruned clone), so the wedge can carry a value the
+   * node marker cannot — a comparison gradient, for instance, which by default
+   * colors branches only. Returning undefined falls back to the graph color.
+   */
+  color?: string | ((node: NewickNode) => string | undefined);
   /** Replace the collapsed node's circular marker with the wedge (default true). */
   hideMarker?: boolean;
 }
@@ -92,7 +99,7 @@ export class CladeShapePresenter implements TreeOperator {
   private saturateAt?: number;
   /** Memoized auto-calibration, keyed on the tree it was computed from. */
   private autoSaturate: { tree: NewickNode; value: number } | null = null;
-  private color?: string;
+  private color?: string | ((node: NewickNode) => string | undefined);
   private hideMarker: boolean;
 
   constructor(options: CladeShapeOptions = {}) {
@@ -143,6 +150,18 @@ export class CladeShapePresenter implements TreeOperator {
     this.viewer = null;
   }
 
+  /**
+   * Change how wedges are colored and redraw them.
+   *
+   * Wedges are built on `render`, which pruning and re-layout trigger but a
+   * presentation switch does not — so a caller flipping the wedge between
+   * structural black and a value gradient needs this to see it.
+   */
+  setColor(color: string | ((node: NewickNode) => string | undefined) | undefined): void {
+    this.color = color;
+    if (this.renderer) this.rebuild();
+  }
+
   private onRender(renderer: Sigma): void {
     // Sigma.kill() empties the container on rebuild; re-attach the overlay.
     const container = this.viewer?.getContainer();
@@ -174,8 +193,9 @@ export class CladeShapePresenter implements TreeOperator {
       // count rather than the truncated one.
       const source = node.source.origin ?? node.source;
       const halfHeight = this.heightFor(hiddenLeaves(source), saturateAt);
+      const chosen = typeof this.color === "function" ? this.color(source) : this.color;
       const color =
-        this.color ??
+        chosen ??
         (graph.hasNode(node.id)
           ? ((graph.getNodeAttribute(node.id, "color") as string) ?? "#e05c5c")
           : "#e05c5c");

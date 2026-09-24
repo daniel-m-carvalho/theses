@@ -227,6 +227,31 @@ export class ComparisonOperator implements TreeOperator {
     this.correspondence = map;
   }
 
+  /**
+   * Move the gradient between the **branches** and the **node markers** at
+   * runtime, without rebuilding the panel.
+   *
+   * The two answer slightly different questions. A branch carries the value of
+   * the node it leads to, so a coloured path reads as "the disagreement lies
+   * along here"; a marker puts the value on the clade itself, which is where a
+   * per-clade metric is actually defined. Neither is wrong, and which reads
+   * better depends on how much of the tree is expanded — hence a switch rather
+   * than a fixed choice.
+   *
+   * Turning both off leaves the operator attached and its values intact but
+   * draws nothing, which is what {@link setEnabled} is for; prefer that.
+   */
+  setColorTargets(targets: { edges?: boolean; nodes?: boolean }): void {
+    if (targets.edges !== undefined) this.colorEdges = targets.edges;
+    if (targets.nodes !== undefined) this.colorNodes = targets.nodes;
+    this.refresh();
+  }
+
+  /** Where the gradient is currently drawn. */
+  getColorTargets(): { edges: boolean; nodes: boolean } {
+    return { edges: this.colorEdges, nodes: this.colorNodes };
+  }
+
   /** Switch presentation strategy (gradient value scale ↔ same/different set). */
   setMode(mode: ComparisonMode): void {
     this.mode = mode;
