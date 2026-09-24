@@ -22,7 +22,7 @@ import {
   type Config,
 } from "phylo-tree-viewer";
 import type { ComparisonSummary, PairSummary } from "../api/types";
-import { buildReport, downloadReport } from "../export/buildReport";
+import { exportReport } from "../export/buildReport";
 import { ExportPanel, type ExportChoices } from "../export/ExportPanel";
 import { ContextMenu } from "../menu/ContextMenu";
 import { TypingLegend } from "../typing/TypingLegend";
@@ -473,8 +473,8 @@ export function ComparisonView({
             ? `showing ${state.slice.displayed_leaves.toLocaleString()} of ${state.slice.total_leaves.toLocaleString()} leaves`
             : "no slice loaded";
 
-        downloadReport(
-          buildReport({
+        exportReport(
+          {
             pair,
             summary,
             title: choices.title,
@@ -489,7 +489,7 @@ export function ComparisonView({
               identical: DIFF_PALETTE[0],
               diverged: DIFF_PALETTE[DIFF_PALETTE.length - 1],
             },
-          }),
+          },
           `${choices.title.replace(/[^\w.-]+/g, "-").toLowerCase()}.html`,
         );
         onExportClose?.();

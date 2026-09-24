@@ -96,6 +96,17 @@ export type {
   ReportImage,
   ReportSwatch,
 } from "./presentation/export/report";
+export {
+  buildComparisonReport,
+  downloadComparisonReport,
+} from "./presentation/export/comparison_report";
+export type {
+  ComparisonReportInput,
+  ComparisonPanel,
+  ComparisonMetric,
+  ComparisonReconciliation,
+  ComparisonView,
+} from "./presentation/export/comparison_report";
 export { snapshotViewer } from "./presentation/export/snapshot";
 export type { SnapshotOptions } from "./presentation/export/snapshot";
 
