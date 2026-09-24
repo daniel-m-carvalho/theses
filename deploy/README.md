@@ -10,20 +10,30 @@ docker compose up --build
 | API docs | <http://localhost:8001/docs> |
 | demo | <http://localhost:3001> |
 
-## The store starts empty
+## The example catalogue builds itself, once
 
-The image carries **code only**. Everything under `store/` is derived from
-`datasets/`, and building it takes minutes to hours depending on tree size — so
-it is not baked into the image and not rebuilt on every deploy. A fresh volume
-means `/api/v1/datasets` returns nothing until you populate it:
+`phylodelta-seed` runs `build-all --if-empty` before the API and the worker
+start, so a fresh volume comes up with the example already in it: the three
+trees, their comparisons, **and the typing data**, which is what the app's
+typing-data switch needs to have anything to switch on.
+
+`--if-empty` makes every later start a no-op, so this costs one run rather than
+one per restart. The image still carries **code only** — everything under
+`store/` is derived from `datasets/` and lives on the volume, where it survives
+restarts and redeploys.
+
+Re-run it by hand when `datasets/` changes; it is safe to run again, and
+without `--if-empty` it rebuilds regardless:
 
 ```sh
 docker compose run --rm phylodelta-service phylodelta build-all
 ```
 
-That ingests the trees, computes comparisons and ingests the isolate metadata
-onto the volume, where it survives restarts and redeploys. Re-run it when
-`datasets/` changes; it is safe to run again.
+To start over completely, delete the volume:
+
+```sh
+docker compose down -v
+```
 
 Individual stages, if you want them separately:
 

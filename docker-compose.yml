@@ -1,4 +1,25 @@
 services:
+  # Builds the example catalogue into the volume the first time the stack comes
+  # up: the trees, their comparisons, and the typing data that goes with them.
+  # Without it a fresh volume leaves the app showing "nothing yet", and the
+  # typing-data switch with nothing to switch on.
+  #
+  # `--if-empty` makes every later start a no-op, so this costs one run rather
+  # than one per restart. Delete the volume to rebuild from scratch.
+  phylodelta-seed:
+    image: phylodelta-service:local
+    build:
+      context: ./code/server
+    command: ["uv", "run", "phylodelta", "build-all", "--if-empty"]
+    restart: "no"
+    environment:
+      PHYLODELTA_STORE: /data/store
+      PHYLODELTA_DATASETS: /data/datasets
+      PHYLODELTA_THREADS: "0"
+    volumes:
+      - phylodelta-data:/data/store
+      - ./datasets:/data/datasets:ro
+
   phylodelta-service:
     image: phylodelta-service:local
     build:
@@ -38,6 +59,9 @@ services:
       - phylodelta-data:/data/store
       # Source data, read-only: the container ingests it and never writes it.
       - ./datasets:/data/datasets:ro
+    depends_on:
+      phylodelta-seed:
+        condition: service_completed_successfully
     healthcheck:
       # Checks that the service answers, not that the store is populated — a
       # fresh volume is empty until `build-all` has run, and the container must
@@ -81,6 +105,8 @@ services:
       - phylodelta-data:/data/store
       - ./datasets:/data/datasets:ro
     depends_on:
+      phylodelta-seed:
+        condition: service_completed_successfully
       phylodelta-service:
         condition: service_healthy
 

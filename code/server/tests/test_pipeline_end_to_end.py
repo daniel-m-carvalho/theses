@@ -164,3 +164,43 @@ def test_invalid_parameters_use_the_same_error_shape(client):
     assert body["code"] == "invalid_request"
     assert "budget" in body["detail"]
     assert body["errors"][0]["field"] == "budget"
+
+
+# --- seeding a fresh deployment ---------------------------------------------
+
+def test_a_half_built_store_does_not_count_as_populated(tmp_path):
+    """The guard the container start-up relies on.
+
+    A run interrupted between stages leaves trees without comparisons, and
+    calling that "populated" would leave the demo half-built with no sign of
+    why — the app would list trees and no pairs, which reads like a bug rather
+    than an unfinished build.
+    """
+    from phylodelta.precompute.pipeline import store_is_populated
+
+    assert store_is_populated(tmp_path) is False
+
+    for part in ("trees", "pairs", "isolates"):
+        (tmp_path / part).mkdir()
+        assert store_is_populated(tmp_path) is False, f"empty {part} should not count"
+        (tmp_path / part / "something").mkdir()
+
+    assert store_is_populated(tmp_path) is True
+
+
+def test_build_all_if_empty_skips_a_built_store(datasets_dir, tmp_path, monkeypatch):
+    """So a restart costs nothing. Seeding runs on every container start."""
+    from phylodelta import config
+    from phylodelta.precompute import pipeline
+
+    monkeypatch.setattr(config, "STORE_DIR", tmp_path)
+    monkeypatch.setattr(config, "DATASETS_DIR", datasets_dir)
+    for part in ("trees", "pairs", "isolates"):
+        (tmp_path / part / "x").mkdir(parents=True)
+
+    ran: list[str] = []
+    for stage in ("ingest_trees", "compute_pairs"):
+        monkeypatch.setattr(pipeline, stage, lambda *a, _s=stage, **k: ran.append(_s) or 0)
+
+    assert pipeline.build_all(if_empty=True) == 0
+    assert ran == [], "nothing should have been rebuilt"

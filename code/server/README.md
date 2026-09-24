@@ -25,6 +25,7 @@ What that buys, measured on the real data:
 ```sh
 uv sync                        # create .venv, install deps (Python 3.12)
 uv run phylodelta build-all      # datasets/ -> store/  (a few minutes, once)
+                                 # trees, comparisons AND the typing data
 uv run uvicorn phylodelta.api.app:app --reload
 uv run phylodelta worker         # in a second terminal, to process uploads
 ```

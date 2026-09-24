@@ -395,8 +395,31 @@ def compute_pair(
     return PairComputed(pair_id, notes, shared_ms, written, lines)
 
 
-def build_all() -> int:
-    """Everything, in dependency order. Comparisons need the trees ingested."""
+def store_is_populated(store_dir: Path | None = None) -> bool:
+    """Whether a store already holds the catalogue.
+
+    All three, not just the trees: a run interrupted between stages leaves
+    trees without comparisons, and calling that "populated" would leave the
+    demo half-built with no sign of why.
+    """
+    store = Path(store_dir or config.STORE_DIR)
+    return all(
+        (store / part).is_dir() and any((store / part).iterdir())
+        for part in ("trees", "pairs", "isolates")
+    )
+
+
+def build_all(if_empty: bool = False) -> int:
+    """Everything, in dependency order. Comparisons need the trees ingested.
+
+    `if_empty` makes this a no-op on an already-built store, which is what a
+    container start-up wants: the demo seeds itself the first time and costs
+    nothing on every restart after.
+    """
+    if if_empty and store_is_populated():
+        print("store already built; nothing to do", file=sys.stderr)
+        return 0
+
     for step, run in (
         ("trees", ingest_trees),
         ("comparisons", compute_pairs),
@@ -451,7 +474,14 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     sub.add_parser("ingest-isolates", help="parse datasets/isolated_data/*.tsv into the store")
-    sub.add_parser("build-all", help="ingest-trees, compute-pairs and ingest-isolates, in order")
+    everything = sub.add_parser(
+        "build-all", help="ingest-trees, compute-pairs and ingest-isolates, in order"
+    )
+    everything.add_argument(
+        "--if-empty",
+        action="store_true",
+        help="do nothing when the store is already built (for container start-up)",
+    )
     sub.add_parser("list-metrics", help="show the registered metric plugins")
 
     args = parser.parse_args(argv)
@@ -472,7 +502,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "ingest-isolates":
         return ingest_isolates_all()
     if args.command == "build-all":
-        return build_all()
+        return build_all(if_empty=args.if_empty)
     if args.command == "list-metrics":
         for name, manifest in registry.discover().items():
             caps = ", ".join(k for k, v in manifest.capabilities.items() if v) or "-"
