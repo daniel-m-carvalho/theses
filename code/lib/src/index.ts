@@ -106,7 +106,14 @@ export type {
   ComparisonMetric,
   ComparisonReconciliation,
   ComparisonView,
+  ReportFormat,
 } from "./presentation/export/comparison_report";
+export {
+  canvasToPdf,
+  canvasToPng,
+  renderHtmlToCanvas,
+} from "./presentation/export/raster";
+export type { RasterOptions } from "./presentation/export/raster";
 export { snapshotViewer } from "./presentation/export/snapshot";
 export type { SnapshotOptions } from "./presentation/export/snapshot";
 

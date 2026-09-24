@@ -7,11 +7,27 @@
  */
 
 import { useState } from "react";
+import type { ReportFormat } from "phylo-tree-viewer";
 
 export interface ExportChoices {
   title: string;
   images: boolean;
+  format: ReportFormat;
 }
+
+/**
+ * The same report, three ways.
+ *
+ * Named by what each is *for* rather than by extension, because the choice is
+ * not really about file types: the layout is identical in all three, and what
+ * differs is whether the reader can select the text, drop it into a document,
+ * or hand it to someone who will print it.
+ */
+const FORMATS: ReadonlyArray<{ key: ReportFormat; label: string; note: string }> = [
+  { key: "html", label: "HTML", note: "Text stays selectable and the pictures full size" },
+  { key: "pdf", label: "PDF", note: "Paginated, for printing or attaching" },
+  { key: "png", label: "PNG", note: "One image, to drop into slides or a document" },
+];
 
 export function ExportPanel({
   defaultTitle,
@@ -30,14 +46,15 @@ export function ExportPanel({
 }) {
   const [title, setTitle] = useState(defaultTitle);
   const [images, setImages] = useState(true);
+  const [format, setFormat] = useState<ReportFormat>("html");
 
   return (
     <div className="export-backdrop" role="dialog" aria-modal="true" aria-label="Export report">
       <div className="export-panel">
         <h2>Export report</h2>
         <p className="export-lead">
-          A single HTML file, with the pictures embedded — open it in a browser, or
-          print it to PDF.
+          One file, with the pictures embedded. The layout is the same whichever
+          format you choose.
         </p>
 
         <label className="export-field">
@@ -48,6 +65,22 @@ export function ExportPanel({
             onChange={(event) => setTitle(event.target.value)}
           />
         </label>
+
+        <fieldset className="export-formats">
+          <legend>Format</legend>
+          {FORMATS.map((option) => (
+            <label key={option.key} className="switch">
+              <input
+                type="radio"
+                name="report-format"
+                checked={format === option.key}
+                onChange={() => setFormat(option.key)}
+              />
+              {option.label}
+              <span className="switch-note">{option.note}</span>
+            </label>
+          ))}
+        </fieldset>
 
         <label className="switch">
           <input
@@ -78,7 +111,7 @@ export function ExportPanel({
             type="button"
             className="primary"
             disabled={busy || !title.trim()}
-            onClick={() => onExport({ title: title.trim(), images })}
+            onClick={() => onExport({ title: title.trim(), images, format })}
           >
             {busy ? "Building…" : `Export ${pairLabel}`}
           </button>

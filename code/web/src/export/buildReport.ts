@@ -11,7 +11,11 @@
  * server that produces them.
  */
 
-import { downloadComparisonReport, type ComparisonReportInput } from "phylo-tree-viewer";
+import {
+  downloadComparisonReport,
+  type ComparisonReportInput,
+  type ReportFormat,
+} from "phylo-tree-viewer";
 import type { ComparisonSummary, PairSummary } from "../api/types";
 
 export interface ReportInput {
@@ -68,6 +72,10 @@ export function toReportInput(input: ReportInput): ComparisonReportInput {
   };
 }
 
-export function exportReport(input: ReportInput, filename: string): void {
-  downloadComparisonReport(toReportInput(input), filename);
+export function exportReport(
+  input: ReportInput,
+  filename: string,
+  format: ReportFormat = "html",
+): Promise<void> {
+  return downloadComparisonReport(toReportInput(input), filename, format);
 }

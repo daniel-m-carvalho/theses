@@ -132,7 +132,16 @@ export function renderReport(report: Report): string {
 <title>${escape(report.title)}</title>
 <style>
   :root { color-scheme: light; }
-  body {
+  /*
+   * Scoped to a CLASS, not to the body element. The PNG and PDF exports
+   * re-render this same markup inside an SVG foreignObject, where the root is
+   * a plain div: a body-scoped rule silently would not apply there, and the
+   * report came out in the browser default serif with its text against the
+   * left edge.
+   */
+  body { margin: 0; }
+  .report {
+    box-sizing: border-box;
     margin: 0 auto; padding: 32px; max-width: 1000px;
     font: 15px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
     color: #16181d; background: #fff;
@@ -160,7 +169,7 @@ export function renderReport(report: Report): string {
   @media print { figure { break-inside: avoid; } section { break-inside: avoid-page; } }
 </style>
 </head>
-<body>
+<body class="report">
 <h1>${escape(report.title)}</h1>
 ${report.subtitle ? `<p class="subtitle">${escape(report.subtitle)}</p>` : ""}
 <p class="generated">Generated ${escape(when)}</p>

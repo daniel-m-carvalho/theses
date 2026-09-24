@@ -629,7 +629,7 @@ export function ComparisonView({
             ? `showing ${state.slice.displayed_leaves.toLocaleString()} of ${state.slice.total_leaves.toLocaleString()} leaves`
             : "no slice loaded";
 
-        exportReport(
+        await exportReport(
           {
             pair,
             summary,
@@ -653,7 +653,8 @@ export function ComparisonView({
               ? { label: ABSENT_LABEL, color: ABSENT_COLOR }
               : undefined,
           },
-          `${choices.title.replace(/[^\w.-]+/g, "-").toLowerCase()}.html`,
+          `${choices.title.replace(/[^\w.-]+/g, "-").toLowerCase()}`,
+          choices.format,
         );
         onExportClose?.();
       } catch (failed) {

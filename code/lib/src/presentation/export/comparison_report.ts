@@ -14,6 +14,7 @@
  * that backend.
  */
 
+import { canvasToPdf, canvasToPng, renderHtmlToCanvas } from "./raster";
 import { renderReport, type Report, type ReportSwatch } from "./report";
 
 export interface ComparisonPanel {
@@ -228,13 +229,47 @@ function viewSetup(view: ComparisonView): Report["sections"][number] {
 }
 
 /** Build the document and hand it to the browser as a download. */
-export function downloadComparisonReport(
+/** What the reader ends up with. All three carry the same layout. */
+export type ReportFormat = "html" | "png" | "pdf";
+
+/**
+ * Build the report and hand it to the browser as a download.
+ *
+ * `html` is the original and stays the default: it is the only one that keeps
+ * the text selectable and the images at full resolution. `png` and `pdf` are
+ * rasterised from that same HTML rather than laid out again, so the three
+ * cannot drift apart — see `raster.ts`.
+ *
+ * Asynchronous for every format, including HTML, because a caller that has to
+ * branch on the format to know whether to await has to know which formats
+ * rasterise, and that is this module's business rather than theirs.
+ */
+export async function downloadComparisonReport(
   input: ComparisonReportInput,
   filename: string,
-): void {
-  const blob = new Blob([renderReport(buildComparisonReport(input))], {
-    type: "text/html;charset=utf-8",
-  });
+  format: ReportFormat = "html",
+): Promise<void> {
+  const html = renderReport(buildComparisonReport(input));
+
+  if (format === "html") {
+    save(new Blob([html], { type: "text/html;charset=utf-8" }), withExtension(filename, "html"));
+    return;
+  }
+
+  const canvas = await renderHtmlToCanvas(html);
+  if (format === "png") {
+    save(await canvasToPng(canvas), withExtension(filename, "png"));
+    return;
+  }
+  save(canvasToPdf(canvas), withExtension(filename, "pdf"));
+}
+
+/** Replace whatever extension the caller supplied with the real one. */
+function withExtension(filename: string, extension: string): string {
+  return `${filename.replace(/\.(html?|png|pdf)$/i, "")}.${extension}`;
+}
+
+function save(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;

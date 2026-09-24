@@ -513,3 +513,20 @@ body {
   font-size: 13px;
   color: var(--muted);
 }
+
+/* The format choice, styled as the switches beside it rather than as a form
+   control: it is one more decision about the report, not a different kind. */
+.export-formats {
+  margin: 0 0 4px;
+  padding: 0;
+  border: 0;
+}
+
+.export-formats legend {
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
