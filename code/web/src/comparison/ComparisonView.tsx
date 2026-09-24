@@ -172,6 +172,7 @@ export function ComparisonView({
   isolateSets = [null, null],
   showTyping = false,
   showGradient = true,
+  labelClades = false,
   summary = null,
   exporting = false,
   onExportClose,
@@ -183,6 +184,7 @@ export function ComparisonView({
   isolateSets?: [string | null, string | null];
   showTyping?: boolean;
   showGradient?: boolean;
+  labelClades?: boolean;
   /** The computed scalars, for the report. */
   summary?: ComparisonSummary | null;
   /** Opened from the header; the panel lives here because the viewers do. */
@@ -195,8 +197,12 @@ export function ComparisonView({
   const [panelHeight, setPanelHeight] = useState(0);
   const autoBudget = readableBudget(panelHeight);
 
-  const [left, leftActions] = useSide(pair.left, pair.id, "rf", initial?.left, autoBudget);
-  const [right, rightActions] = useSide(pair.right, pair.id, "rf", initial?.right, autoBudget);
+  const [left, leftActions] = useSide(
+    pair.left, pair.id, "rf", initial?.left, autoBudget, labelClades,
+  );
+  const [right, rightActions] = useSide(
+    pair.right, pair.id, "rf", initial?.right, autoBudget, labelClades,
+  );
 
   // Which typing columns to show. Several at once is allowed; see
   // `useTypingData` for what that does to a bar's length.

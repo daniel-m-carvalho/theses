@@ -83,27 +83,27 @@ describe("a real slice from the backend", () => {
     expect(at).toBe(slice.nodes.id.indexOf(slice.root));
   });
 
-  it("labels a large clade with its size, and leaves the small ones bare", () => {
-    // A wedge has no identifier of its own, so bare it reads as a leaf whose
-    // name went missing. Only the large ones are named: in this slice 31
-    // wedges hide 13,349 down to 2, and labelling all of them would be worse
-    // than labelling none.
+  it("leaves clades unlabelled unless asked", () => {
+    // A clade's leaf count is the only thing there is to say about it, and
+    // saying it for all 31 at once is a lot. Whether that is worth the clutter
+    // is the reader's call, so it is a switch rather than a threshold guessed
+    // here.
     const built = treeFromSlice(slice);
-    const named: { stands: number; name: string }[] = [];
     for (const storedId of built.truncated) {
-      const node = built.byStoredId.get(storedId)!;
-      named.push({ stands: node.trueLeafCount ?? 0, name: node.name });
+      expect(built.byStoredId.get(storedId)!.name).toBe("");
     }
-    const labelled = named.filter((w) => w.name !== "");
-    const bare = named.filter((w) => w.name === "");
+  });
 
-    expect(labelled.length).toBeGreaterThan(0);
-    expect(bare.length).toBeGreaterThan(labelled.length);
-    // Every labelled one is bigger than every bare one.
-    expect(Math.min(...labelled.map((w) => w.stands))).toBeGreaterThan(
-      Math.max(...bare.map((w) => w.stands)),
-    );
-    expect(labelled.some((w) => /^[\d,]+ leaves$/.test(w.name))).toBe(true);
+  it("labels every clade with its size when asked", () => {
+    const built = treeFromSlice(slice, { labelClades: true });
+    const names: string[] = [];
+    for (const storedId of built.truncated) {
+      names.push(built.byStoredId.get(storedId)!.name);
+    }
+    expect(names.length).toBeGreaterThan(20);
+    expect(names.every((name) => /^[\d,]+ leaves$/.test(name))).toBe(true);
+    // Including the small ones: no threshold is applied.
+    expect(names).toContain("2 leaves");
   });
 
   it("blanks the placeholder label the source Newick uses for unnamed nodes", () => {
@@ -117,7 +117,7 @@ describe("a real slice from the backend", () => {
     expect(nodes.every((n) => n.name !== "_")).toBe(true);
     // Real leaf labels survive untouched.
     expect(nodes.some((n) => /^\d+$/.test(n.name))).toBe(true);
-    // And some tips are still bare: the small clades.
+    // And clades are bare by default.
     expect(nodes.some((n) => n.name === "")).toBe(true);
     // And every node still knows its backend id.
     expect(nodes.every((n) => typeof n.metadata?.storedId === "number")).toBe(true);

@@ -110,6 +110,7 @@ export function useSide(
   metric = "rf",
   initialPath: number[] = [],
   autoBudget: number = DEFAULT_BUDGET,
+  labelClades: boolean = false,
 ): [SideState, SideActions] {
   const [path, setPath] = useState<number[]>(initialPath);
 
@@ -155,7 +156,7 @@ export function useSide(
       .slice(treeId, { root, budget, compare, metric, signal: controller.signal })
       .then((fetched) => {
         if (ticket !== latest.current) return;
-        const built = treeFromSlice(fetched);
+        const built = treeFromSlice(fetched, { labelClades });
         setSlice(fetched);
         setTree(built);
         setGradient(gradientFrom(built, fetched.comparison));
@@ -172,7 +173,10 @@ export function useSide(
       });
 
     return () => controller.abort();
-  }, [treeId, root, budget, compare, metric, nonce]);
+    // `labelClades` only changes a node's display name, so the slice itself is
+    // unchanged — but the tree handed to the viewer must be rebuilt for the
+    // new names to reach it.
+  }, [treeId, root, budget, compare, metric, nonce, labelClades]);
 
   const actions: SideActions = {
     focus: useCallback((storedId: number) => {

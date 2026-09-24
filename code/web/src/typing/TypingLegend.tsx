@@ -11,8 +11,8 @@
  * legend comes to disagree with the picture it explains.
  */
 
-import { useEffect, useRef, useState } from "react";
 import type { BarScale } from "phylo-tree-viewer";
+import { CheckboxMenu } from "../ui/CheckboxMenu";
 
 export function TypingLegend({
   assignments,
@@ -47,7 +47,23 @@ export function TypingLegend({
   return (
     <footer className="typing-legend">
       <div className="legend-head">
-        <ColumnPicker keys={keys} chosen={segmentKeys} onToggle={toggle} />
+        <CheckboxMenu
+          title="Colour by"
+          summary={
+            segmentKeys.length === 0
+              ? "none"
+              : segmentKeys.length <= 2
+                ? segmentKeys.join(", ")
+                : `${segmentKeys.length} columns`
+          }
+          items={keys.map((key) => ({
+            key,
+            label: key,
+            checked: segmentKeys.includes(key),
+          }))}
+          onToggle={toggle}
+          openUpward
+        />
 
 
         <label className="legend-scale">
@@ -82,82 +98,5 @@ export function TypingLegend({
         ))}
       </ul>
     </footer>
-  );
-}
-
-/**
- * A dropdown that stays open while you tick several columns.
- *
- * Shaped like the bar-length select beside it — the same compact closed
- * state — but a native `<select multiple>` cannot be that: browsers render it
- * as a permanently expanded list box, and adding a second option needs
- * Ctrl/Cmd-click, which nothing on screen can tell you.
- *
- * This opens *upward*, out of the footer's box. That is why the footer must
- * not scroll: an overflow-scrolling ancestor clips an absolutely positioned
- * descendant, and the menu was once rendered and then cut away entirely,
- * leaving clicks to land on the tree canvas behind it.
- */
-function ColumnPicker({
-  keys,
-  chosen,
-  onToggle,
-}: {
-  keys: string[];
-  chosen: string[];
-  onToggle: (key: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const away = (event: MouseEvent) => {
-      if (!ref.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const key = (event: KeyboardEvent) => event.key === "Escape" && setOpen(false);
-    document.addEventListener("mousedown", away);
-    document.addEventListener("keydown", key);
-    return () => {
-      document.removeEventListener("mousedown", away);
-      document.removeEventListener("keydown", key);
-    };
-  }, [open]);
-
-  const summary =
-    chosen.length === 0
-      ? "none"
-      : chosen.length <= 2
-        ? chosen.join(", ")
-        : `${chosen.length} columns`;
-
-  return (
-    <div className="column-picker" ref={ref}>
-      <span className="legend-label">Colour by</span>
-      <button
-        type="button"
-        className="picker-button"
-        aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
-      >
-        <span className="picker-summary">{summary}</span>
-        <span aria-hidden="true">▾</span>
-      </button>
-
-      {open ? (
-        <div className="picker-menu" role="group" aria-label="Typing columns">
-          {keys.map((key) => (
-            <label key={key}>
-              <input
-                type="checkbox"
-                checked={chosen.includes(key)}
-                onChange={() => onToggle(key)}
-              />
-              {key}
-            </label>
-          ))}
-        </div>
-      ) : null}
-    </div>
   );
 }

@@ -331,7 +331,8 @@ body {
 .legend-label { font-size: 12px; color: var(--muted); flex: 0 0 auto; }
 
 
-.column-picker { position: relative; display: flex; align-items: center; gap: 6px; }
+.checkbox-menu { position: relative; display: flex; align-items: center; gap: 6px; }
+.menu-title { font-size: 12px; color: var(--muted); }
 
 /*
  * Sized and bordered to sit beside the bar-length select as a pair: the
@@ -359,10 +360,10 @@ body {
 
 .picker-menu {
   position: absolute;
-  bottom: calc(100% + 6px);
+  top: calc(100% + 6px);
   left: 0;
   z-index: 30;
-  min-width: 210px;
+  min-width: 240px;
   max-height: 280px;
   overflow: auto;
   padding: 6px;
@@ -373,9 +374,13 @@ body {
   display: grid;
   gap: 2px;
 }
+/* Opens upward where the control sits at the foot of the window. */
+.picker-menu.up { top: auto; bottom: calc(100% + 6px); }
+.picker-menu.right { left: auto; right: 0; }
+
 .picker-menu label {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   padding: 5px 8px;
   border-radius: 6px;
@@ -384,7 +389,8 @@ body {
   white-space: nowrap;
 }
 .picker-menu label:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
-.picker-menu input { margin: 0; }
+.picker-menu input { margin: 2px 0 0; }
+.menu-note { display: block; font-size: 12px; color: var(--muted); }
 
 .legend-scale { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
 .legend-scale select {

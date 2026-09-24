@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "./api/client";
 import { ComparisonView } from "./comparison/ComparisonView";
 import { UploadPanel } from "./upload/UploadPanel";
+import { CheckboxMenu } from "./ui/CheckboxMenu";
 import { useUrlState } from "./useUrlState";
 import type {
   ComparisonSummary,
@@ -24,6 +25,7 @@ export function App() {
   const [showTyping, setShowTyping] = useState(false);
   // Divergence colouring is on by default: it is what the comparison is for.
   const [showGradient, setShowGradient] = useState(true);
+  const [labelClades, setLabelClades] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [view, setView] = useUrlState();
   const [chosen, setChosen] = useState<PairSummary | null>(null);
@@ -86,27 +88,40 @@ export function App() {
           <span className="chip">{me.display_name || me.owner_id}</span>
         ) : null}
         {chosen ? (
-          <label
-            className="switch inline"
-            title="Colour branches by how much the two trees disagree there"
-          >
-            <input
-              type="checkbox"
-              checked={showGradient}
-              onChange={(event) => setShowGradient(event.target.checked)}
-            />
-            Divergence
-          </label>
-        ) : null}
-        {chosen ? (
-          <label className="switch inline" title="Show isolate composition per leaf">
-            <input
-              type="checkbox"
-              checked={showTyping}
-              onChange={(event) => setShowTyping(event.target.checked)}
-            />
-            Typing data
-          </label>
+          /*
+           * One menu rather than a checkbox each. Three switches across a
+           * header is a row of unlabelled state; a menu names what it holds
+           * and leaves room for the next one.
+           */
+          <CheckboxMenu
+            summary="View"
+            align="right"
+            items={[
+              {
+                key: "gradient",
+                label: "Divergence",
+                checked: showGradient,
+                note: "colour branches by how much the trees disagree",
+              },
+              {
+                key: "typing",
+                label: "Typing data",
+                checked: showTyping,
+                note: "a bar of isolates on each leaf",
+              },
+              {
+                key: "clades",
+                label: "Clade sizes",
+                checked: labelClades,
+                note: "label every collapsed clade with its leaf count",
+              },
+            ]}
+            onToggle={(key) => {
+              if (key === "gradient") setShowGradient((on) => !on);
+              if (key === "typing") setShowTyping((on) => !on);
+              if (key === "clades") setLabelClades((on) => !on);
+            }}
+          />
         ) : null}
         {chosen ? (
           <button
@@ -149,6 +164,7 @@ export function App() {
             isolateSets={isolateSetsFor(chosen, datasets)}
             showTyping={showTyping}
             showGradient={showGradient}
+            labelClades={labelClades}
             summary={summary}
             exporting={exporting}
             onExportClose={() => setExporting(false)}
