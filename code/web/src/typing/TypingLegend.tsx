@@ -11,7 +11,6 @@
  * legend comes to disagree with the picture it explains.
  */
 
-import { useEffect, useRef, useState } from "react";
 import type { BarScale } from "phylo-tree-viewer";
 
 export function TypingLegend({
@@ -37,17 +36,33 @@ export function TypingLegend({
     String(a ?? "").localeCompare(String(b ?? "")),
   );
 
-  const toggle = (key: string) =>
-    onSegmentKeys(
-      segmentKeys.includes(key)
-        ? segmentKeys.filter((candidate) => candidate !== key)
-        : [...segmentKeys, key],
-    );
-
   return (
     <footer className="typing-legend">
       <div className="legend-head">
-        <ColumnPicker keys={keys} chosen={segmentKeys} onToggle={toggle} />
+        <label className="legend-columns">
+          Colour by
+          {/*
+            A native multi-select, as asked for. Worth knowing how it is
+            driven: a plain click *replaces* the selection, so adding a second
+            column needs Ctrl (Cmd on a Mac) and a range needs Shift. Nothing
+            on screen says so, which is why the hint sits beside it.
+          */}
+          <select
+            multiple
+            size={Math.min(6, Math.max(3, keys.length))}
+            value={segmentKeys}
+            onChange={(event) =>
+              onSegmentKeys([...event.target.selectedOptions].map((option) => option.value))
+            }
+          >
+            {keys.map((key) => (
+              <option key={key} value={key}>
+                {key}
+              </option>
+            ))}
+          </select>
+        </label>
+        <span className="legend-hint">Ctrl/Cmd-click to add, Shift-click for a range</span>
 
         <label className="legend-scale">
           Bar length
@@ -81,76 +96,5 @@ export function TypingLegend({
         ))}
       </ul>
     </footer>
-  );
-}
-
-/**
- * A dropdown that stays open while you tick several columns.
- *
- * `<select multiple>` is the native fit and is unusable in practice —
- * ctrl-click to add, and it renders as a permanently expanded list box. This
- * keeps the compact closed state of a normal select and opens onto checkboxes.
- */
-function ColumnPicker({
-  keys,
-  chosen,
-  onToggle,
-}: {
-  keys: string[];
-  chosen: string[];
-  onToggle: (key: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const away = (event: MouseEvent) => {
-      if (!ref.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const key = (event: KeyboardEvent) => event.key === "Escape" && setOpen(false);
-    document.addEventListener("mousedown", away);
-    document.addEventListener("keydown", key);
-    return () => {
-      document.removeEventListener("mousedown", away);
-      document.removeEventListener("keydown", key);
-    };
-  }, [open]);
-
-  const summary =
-    chosen.length === 0
-      ? "none"
-      : chosen.length <= 2
-        ? chosen.join(", ")
-        : `${chosen.length} columns`;
-
-  return (
-    <div className="column-picker" ref={ref}>
-      <span className="legend-label">Colour by</span>
-      <button
-        type="button"
-        className="picker-button"
-        aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
-      >
-        {summary}
-        <span aria-hidden="true">▾</span>
-      </button>
-
-      {open ? (
-        <div className="picker-menu" role="group" aria-label="Typing columns">
-          {keys.map((key) => (
-            <label key={key}>
-              <input
-                type="checkbox"
-                checked={chosen.includes(key)}
-                onChange={() => onToggle(key)}
-              />
-              {key}
-            </label>
-          ))}
-        </div>
-      ) : null}
-    </div>
   );
 }

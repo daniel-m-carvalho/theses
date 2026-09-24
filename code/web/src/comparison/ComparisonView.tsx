@@ -28,7 +28,6 @@ import {
   PIXELS_PER_LEAF,
   readableBudget,
   useSide,
-  type SideActions,
   type SideState,
 } from "./useSide";
 
@@ -136,6 +135,20 @@ const CONFIG: Config = {
    */
   link: false,
 };
+
+/**
+ * Where to put the menu, in page coordinates.
+ *
+ * The viewer reports a right-click in coordinates relative to **its own
+ * container**, and the menu is positioned `fixed`, which is relative to the
+ * viewport. Used directly, a click at x=120 in the right-hand panel opened the
+ * menu at x=120 on the page — over in the left panel. The two panels made it
+ * obvious; with one it would have looked like a small offset.
+ */
+function toViewport(container: HTMLElement, x: number, y: number) {
+  const box = container.getBoundingClientRect();
+  return { x: box.left + x, y: box.top + y };
+}
 
 export function ComparisonView({
   pair,
@@ -296,11 +309,19 @@ export function ComparisonView({
           // The emit is synchronous inside the DOM dispatch, so this still
           // suppresses the browser's own menu.
           original.preventDefault?.();
-          setMenu({ side, at: { x, y }, storedId: keyToStoredId.current[side].get(node) });
+          setMenu({
+            side,
+            at: toViewport(panel.viewer.getContainer(), x, y),
+            storedId: keyToStoredId.current[side].get(node),
+          });
         }),
         panel.viewer.events.on("rightClickStage", ({ x, y, original }) => {
           original.preventDefault?.();
-          setMenu({ side, at: { x, y }, storedId: lastSelected.current[side] ?? undefined });
+          setMenu({
+            side,
+            at: toViewport(panel.viewer.getContainer(), x, y),
+            storedId: lastSelected.current[side] ?? undefined,
+          });
         }),
         // A left click on empty canvas is the deliberate "never mind".
         // Measured: Sigma emits `clickStage` only when no node was hit, so
@@ -420,8 +441,8 @@ export function ComparisonView({
   return (
     <div className="comparison">
       <header className="comparison-bar">
-        <Side label="Left" state={left} actions={leftActions} selected={selected[0]} />
-        <Side label="Right" state={right} actions={rightActions} selected={selected[1]} />
+        <Side label="Left" state={left} selected={selected[0]} />
+        <Side label="Right" state={right} selected={selected[1]} />
       </header>
 
       <div className="panels">
@@ -473,12 +494,10 @@ function Panel({
 function Side({
   label,
   state,
-  actions,
   selected,
 }: {
   label: string;
   state: SideState;
-  actions: SideActions;
   selected: number | null;
 }) {
   const slice = state.slice;
@@ -500,11 +519,6 @@ function Side({
             : null}
           {state.canGoBack ? ` · ${state.path.length} level(s) in` : null}
         </p>
-      ) : null}
-      {state.canGoBack ? (
-        <button type="button" className="link-button" onClick={actions.reset}>
-          Back to whole tree
-        </button>
       ) : null}
     </div>
   );
