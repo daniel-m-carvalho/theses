@@ -7,8 +7,10 @@
  * worse.
  */
 
-import { describe, expect, it } from "vitest";
-import { DEFAULT_BUDGET, readableBudget } from "./useSide";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { api, ApiError } from "../api/client";
+import { actAsync, renderHook } from "../test_support/renderHook";
+import { DEFAULT_BUDGET, readableBudget, useSide } from "./useSide";
 
 describe("readableBudget", () => {
   it("waits rather than guessing before the panel is measured", () => {
@@ -44,5 +46,49 @@ describe("readableBudget", () => {
   it("has a default for the unmeasured case that is itself readable", () => {
     expect(DEFAULT_BUDGET).toBeGreaterThan(40);
     expect(DEFAULT_BUDGET).toBeLessThan(600);
+  });
+});
+
+describe("arriving from the other panel", () => {
+  const leaf = 3296;
+
+  function runJump(ancestor: typeof api.ancestor) {
+    vi.spyOn(api, "ancestor").mockImplementation(ancestor);
+    // The slice itself is not under test here; keep it from touching the
+    // network so only the widening decides what happens.
+    vi.spyOn(api, "slice").mockImplementation(
+      () => new Promise(() => {}) as ReturnType<typeof api.slice>,
+    );
+    return renderHook(() => useSide("vibrio-upgma", "a__b"));
+  }
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it("roots at the widened ancestor and keeps the node drawn", async () => {
+    const { result } = runJump(async () => ({
+      node: 3266,
+      leaves: 20,
+      climbed: 12,
+      reached_root: false,
+    }));
+
+    await actAsync(() => result.current[1].focusWithContext(leaf));
+
+    expect(result.current[0].path).toEqual([3266]);
+  });
+
+  it("does not move the view when the widening fails", async () => {
+    // What shipped: the failure silently fell back to focusing the bare node,
+    // so when the running server predated /ancestor every jump 404'd and
+    // rooted the panel at a single leaf — the exact symptom the endpoint was
+    // added to remove, with nothing on screen to say a call had failed.
+    const { result } = runJump(async () => {
+      throw new ApiError(404, { code: "not_found", detail: "No such route" });
+    });
+
+    await actAsync(() => result.current[1].focusWithContext(leaf));
+
+    expect(result.current[0].path).toEqual([]);
+    expect(result.current[0].error).toMatch(/where 3296 sits/);
   });
 });

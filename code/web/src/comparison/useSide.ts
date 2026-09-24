@@ -243,14 +243,25 @@ export function useSide(
           // quarter of jumps stopped under the floor and landed on two dots.
           // `keep` below is what guarantees the leaf is drawn, at any size.
           .ancestor(treeId, storedId, { minLeaves: JUMP_CONTEXT_LEAVES })
-          // The node asked about is kept drawn inside whatever it widened to.
-          // /ancestor cannot always stay under the ceiling — a tip whose only
-          // parent is enormous leaves no choice — and without this those jumps
-          // summarise the very leaf they were asked to find.
+          // The node asked about is kept drawn inside whatever it widened to,
+          // however wide that is — see JUMP_CONTEXT_LEAVES and the slice's
+          // `keep`.
           .then((context) => focus(context.node, storedId))
-          .catch(() => focus(storedId));
+          .catch((failed) => {
+            // Emphatically NOT a silent fall back to the bare node. That is
+            // what this did first, and when the running server turned out to
+            // predate the endpoint, every jump 404'd and quietly rooted the
+            // panel at a single leaf — the exact symptom the endpoint was
+            // added to remove, with nothing on screen to say a call had
+            // failed. A wrong view that looks deliberate is worse than an
+            // error, so the view does not move and the panel says why.
+            setError(
+              `Could not work out where ${storedId} sits in ${treeId}: ` +
+                `${failed instanceof ApiError ? failed.message : String(failed)}`,
+            );
+          });
       },
-      [treeId, focus],
+      [treeId, focus, setError],
     ),
 
     back: useCallback(() => {

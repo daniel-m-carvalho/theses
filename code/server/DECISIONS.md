@@ -2869,6 +2869,21 @@ node deeper than the budget stays behind a wedge — with 60 tips, a 60-deep pat
 spends them all before arriving. Real jumps climb one level, so this is a limit
 rather than a problem, and leaves conserve either way.
 
+### 27.4b A silent fallback hid the whole thing
+
+The jump's error handling was `.catch(() => focus(storedId))` — on any failure, root at the bare
+node. That is the single dot the endpoint exists to remove, produced deliberately, with nothing on
+screen to say a call had failed.
+
+It went unnoticed because the running dev server had been started **before** `/ancestor` existed and
+was not launched with `--reload`. Every jump 404'd. The tests passed, the sweep passed on all three
+pairs, and the screen kept showing one dot — the failure mode was indistinguishable from the bug
+being fixed, which is exactly what made it invisible.
+
+A wrong view that looks deliberate is worse than an error. The view no longer moves on failure and
+the panel says why. `test_support/renderHook` gained an async `act` so the case is actually covered:
+widening fails, the path stays empty, an error is set.
+
 ### 27.5 The sweep
 
 `tools/validate_navigation.py` drives the real route functions — not a
