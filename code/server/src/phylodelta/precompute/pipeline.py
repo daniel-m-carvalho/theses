@@ -299,13 +299,13 @@ def compute_pair(
             "same_species": same_species,
         }
     }
-    if declared and not same_species:
-        notes["caution"] = (
-            f"{left_species} vs {right_species}: "
-            "sequence types are numbered per species, so leaves matched by "
-            "identical labels are not the same organisms."
-        )
-    elif not declared:
+    # No caution is written for a declared cross-species pair (user,
+    # 2026-09-24). The **fact** is still recorded and still served —
+    # `same_species` is false, and the report prints "Same species: no" — so a
+    # reader can see what was compared. What is gone is the sentence
+    # explaining what that implies, which is the biologist's own ground and
+    # was being restated on every pair and in every export.
+    if not declared:
         notes["caution"] = (
             "Species was not declared for these trees, so whether their labels "
             "denote the same organisms could not be checked. Sequence types are "

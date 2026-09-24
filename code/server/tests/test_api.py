@@ -90,11 +90,14 @@ def test_a_listed_pair_reports_what_was_actually_computed(compared_client):
     assert same["metrics"] == ["rf"]
 
 
-def test_cross_species_pair_is_offered_but_flagged(compared_client):
-    """Not blocked -- whether such a comparison is worth making is the user's call.
+def test_a_cross_species_pair_reports_the_fact_without_the_lecture(compared_client):
+    """Not blocked -- whether such a comparison is worth making is the user's
+    call, and so is what it implies.
 
-    But sequence types are numbered per species, so ~99% of labels collide
-    while sharing no organism. The server states that rather than deciding it.
+    `same_species` stays false and the overlap is reported, so a reader can see
+    exactly what was matched. The prose explaining that sequence types are
+    numbered per species was removed (user, 2026-09-24): it restated the
+    biologist's own ground on every pair and in every export.
     """
     pairs = {p["id"]: p for p in compared_client.get("/api/v1/datasets").json()["pairs"]}
     cross = pairs["clostridium-upgma__vibrio-upgma"]
@@ -102,8 +105,7 @@ def test_cross_species_pair_is_offered_but_flagged(compared_client):
     assert cross["species"] == "clostridium/vibrio"
     assert cross["shared_leaves"] == 17_490
     assert cross["shared_fraction"] > 0.99
-    assert cross["caution"] is not None
-    assert "not the same organisms" in cross["caution"]
+    assert cross["caution"] is None
 
 
 def test_an_uncomputed_pair_is_not_listed(client):

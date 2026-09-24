@@ -324,7 +324,7 @@ def test_declared_species_reaches_the_result(client, store):
         f"/api/v1/comparisons/{comparison_id}", headers={AUTH_HEADER: "alice"}
     ).json()
     assert body["same_species"] is False
-    assert "not the same organisms" in body["caution"]
+    assert body["caution"] is None
 
 
 def test_undeclared_species_is_reported_as_unknown_not_as_matching(client, store):
