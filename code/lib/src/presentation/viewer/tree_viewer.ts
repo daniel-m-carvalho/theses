@@ -12,6 +12,67 @@ import { buildGraph, BRANCH_COLOR, type LayoutNode } from "../tree/layout";
 import { leafNamesOf, mrcaId } from "../tree/navigation";
 import { Emitter } from "./emitter";
 
+/** Gap in pixels between a tip and its label. Matches Sigma's own spacing. */
+const LABEL_GAP = 3;
+
+/**
+ * Extra clearance for a collapsed clade's label.
+ *
+ * A wedge is a DOM overlay, not a Sigma marker, so the node's `size` says
+ * nothing about how much room the triangle takes. Without this the label was
+ * drawn under it and lost its last character — "598 leave".
+ *
+ * Matches {@link CladeShapeOptions.length}'s default. The two are not wired
+ * together because the label is drawn by the renderer and the wedge by an
+ * operator that may not even be attached; a consumer tuning `length` far from
+ * the default should expect to nudge this.
+ */
+const COLLAPSED_LABEL_GAP = 17;
+
+/**
+ * Draw a node's label clear of its wedge, on the side the tree grows away from.
+ *
+ * Two things Sigma's own drawer gets wrong for a dendrogram.
+ *
+ * **Side.** Sigma always writes to the right of the node. That is correct for
+ * the left-hand panel of a comparison, whose tree grows leftward so the label
+ * sits outside it — and wrong for a mirrored panel, where it put every label
+ * inside the tree, over the branches.
+ *
+ * **Clearance.** A collapsed clade is drawn as a wedge by an *operator*, as a
+ * DOM overlay, so the node's `size` says nothing about how much room the
+ * triangle takes. Both panels drew the label under it and lost the leading
+ * characters: a clade of 13,349 read "3,349 leaves".
+ */
+function labelDrawer(reflect: boolean) {
+  return function drawNodeLabel(
+    context: CanvasRenderingContext2D,
+    data: { x: number; y: number; size: number; label: string | null; collapsed?: boolean },
+    settings: {
+      labelFont: string;
+      labelSize: number;
+      labelWeight: string;
+      labelColor: { color?: string };
+    },
+  ): void {
+    if (!data.label) return;
+    context.font = `${settings.labelWeight} ${settings.labelSize}px ${settings.labelFont}`;
+    context.fillStyle = settings.labelColor.color ?? "#000";
+
+    const gap = data.size + (data.collapsed ? COLLAPSED_LABEL_GAP : LABEL_GAP);
+    const y = data.y + settings.labelSize / 3;
+
+    if (reflect) {
+      context.textAlign = "right";
+      context.fillText(data.label, data.x - gap, y);
+      // Restored: the context is shared with every other label this frame.
+      context.textAlign = "left";
+    } else {
+      context.fillText(data.label, data.x + gap, y);
+    }
+  };
+}
+
 /** A node reducer in the composable pipeline (see {@link TreeViewer.addNodeReducer}). */
 export type NodeReducer = (
   node: string,
@@ -510,6 +571,9 @@ export class TreeViewer {
       renderEdgeLabels: false,
       labelSize: 11,
       labelRenderedSizeThreshold: 0,
+      // Both panels: Sigma's drawer neither picks the outward side nor clears
+      // a wedge. See labelDrawer.
+      defaultDrawNodeLabel: labelDrawer(this.reflect),
       ...(this.labelDensity != null ? { labelDensity: this.labelDensity } : {}),
       ...(this.labelGridCellSize != null
         ? { labelGridCellSize: this.labelGridCellSize }

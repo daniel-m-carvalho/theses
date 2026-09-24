@@ -66,8 +66,8 @@ const VIEWER = {
    * A cell close to the row spacing gives roughly one label per row, which is
    * as many as can be read at this size anyway.
    */
-  labelDensity: 1,
-  labelGridCellSize: PIXELS_PER_LEAF * 1.6,
+  labelDensity: 2,
+  labelGridCellSize: PIXELS_PER_LEAF,
 } as const;
 
 /**
