@@ -373,8 +373,15 @@ export class ComparisonOperator implements TreeOperator {
     this.peer.highlightByKey(peerKey);
   }
 
-  /** Find the node with this key, center it, and blink-highlight it. */
-  highlightByKey(key: string): void {
+  /**
+   * Find the node with this key and blink-highlight it, centering by default.
+   *
+   * Pass `center: false` when the view was *already* arranged around the node
+   * — a panel re-rooted on it, say. Centering zooms in to `ratio` 0.7, which
+   * on a freshly fitted subtree crops the surrounding structure: exactly the
+   * context that made the node worth pointing at.
+   */
+  highlightByKey(key: string, options: { center?: boolean } = {}): void {
     if (!this.viewer) return;
     let foundId: string | null = null;
     for (const [id, layoutNode] of this.viewer.getNodeMap()) {
@@ -385,7 +392,7 @@ export class ComparisonOperator implements TreeOperator {
     }
     if (!foundId) return;
     this.highlightedId = foundId;
-    this.centerOn(foundId);
+    if (options.center ?? true) this.centerOn(foundId);
     this.startBlink();
   }
 

@@ -98,6 +98,15 @@ export interface SideState {
   /** Root ids visited, oldest first. The last entry is where we are. */
   path: number[];
   canGoBack: boolean;
+  /**
+   * The node this panel was sent to from the other one, if that is what put it
+   * here. Null after any ordinary navigation.
+   *
+   * Exposed so the view can point at it. Landing in the right neighbourhood is
+   * only half of "find this leaf in the other tree" — among eighty tips, one
+   * of which is the answer, the panel still has to say which.
+   */
+  arrivedAt: number | null;
 }
 
 export interface SideActions {
@@ -304,6 +313,7 @@ export function useSide(
       loading,
       error,
       path,
+      arrivedAt: keep,
       canGoBack: path.length > 0,
     },
     actions,

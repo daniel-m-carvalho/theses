@@ -108,6 +108,17 @@ function wedgeColorFrom(scale: SequentialColorScale) {
   };
 }
 
+/**
+ * How the leaf a jump was aimed at is marked once the panel lands.
+ *
+ * Deliberately outside the divergence ramp, which runs blue -> cyan -> green
+ * -> yellow: a marker drawn in one of those colours would read as a value on
+ * the scale. It is also the colour the library blinks a located node in, so
+ * the blink settles into the mark rather than handing over to a different one.
+ */
+const ARRIVAL_COLOR = "#ff0000";
+const ARRIVAL_SIZE = 9;
+
 const CONFIG: Config = {
   panels: [
     {
@@ -306,6 +317,11 @@ export function ComparisonView({
   const sides = useRef<[SideState, SideState]>([left, right]);
   sides.current = [left, right];
 
+  // Same reason: the node reducer below is installed once, so it reads the
+  // arrival through a ref rather than closing over the render it was built in.
+  const arrivedAt = useRef<[number | null, number | null]>([null, null]);
+  arrivedAt.current = [left.arrivedAt, right.arrivedAt];
+
   const bothLoaded = Boolean(left.tree && right.tree);
 
   // --- build the panels, once ------------------------------------------
@@ -369,7 +385,26 @@ export function ComparisonView({
       // createComparison, and again on every later one: pruning and re-layout
       // mint new keys.
       refreshKeys(side, panel.viewer);
+
+      // Mark the leaf this panel was sent to. The library centres and blinks
+      // it on arrival, which draws the eye once; this is what is still there
+      // when the user looks back, and it lasts until they navigate away.
+      const unmark = panel.viewer.addNodeReducer(
+        (key: string, data: Record<string, unknown>) => {
+          const wanted = arrivedAt.current[side];
+          if (wanted === null) return data;
+          if (keyToStoredId.current[side].get(key) !== wanted) return data;
+          return {
+            ...data,
+            color: ARRIVAL_COLOR,
+            size: Math.max((data.size as number) || 0, ARRIVAL_SIZE),
+            zIndex: 20,
+          };
+        },
+      );
+
       const off = [
+        unmark,
         panel.viewer.events.on("render", () => refreshKeys(side, panel.viewer)),
         panel.viewer.events.on("rightClickNode", ({ node, x, y, original }) => {
           // The emit is synchronous inside the DOM dispatch, so this still
@@ -419,6 +454,31 @@ export function ComparisonView({
   useEffect(() => {
     if (right.tree) handle.current?.panels[1]?.viewer.setTree(right.tree.root);
   }, [right.tree]);
+
+  /*
+   * Point at the leaf the jump was aimed at.
+   *
+   * After the slice, not with it: the keys the reducer matches on are minted
+   * by the library during layout, so nothing can be marked until the new slice
+   * has rendered. `left.slice`/`right.slice` in the deps is what waits for it.
+   */
+  useEffect(() => {
+    const built = handle.current;
+    if (!built) return;
+    built.panels.forEach((panel, index) => {
+      const side = index as 0 | 1;
+      refreshKeys(side, panel.viewer);
+      panel.viewer.applyReducers();
+      const wanted = sides.current[side].arrivedAt;
+      if (wanted === null) return;
+      const label = sides.current[side].tree?.byStoredId.get(wanted)?.name;
+      // The blink is the library's, and it keys by name — which is what
+      // `keyBy: "name"` means here, and is exact for a leaf. Not its camera
+      // move: the panel was just re-rooted around this node, and centring
+      // zooms in far enough to crop the neighbourhood that is the point.
+      if (label) panel.operators.comparison?.highlightByKey(label, { center: false });
+    });
+  }, [left.slice, right.slice, left.arrivedAt, right.arrivedAt, refreshKeys]);
 
   // Report where we are, so the URL names it and a refresh comes back here.
   useEffect(() => {
@@ -662,6 +722,9 @@ function Side({
   selected: number | null;
 }) {
   const slice = state.slice;
+  const arrived =
+    state.arrivedAt !== null ? state.tree?.byStoredId.get(state.arrivedAt) : undefined;
+  const arrivedLabel = (arrived?.metadata?.label as string) || arrived?.name || null;
   return (
     <div className="side-summary">
       <p className="side-name">
@@ -679,6 +742,17 @@ function Side({
             ? ` · ${slice.hidden_leaves.toLocaleString()} behind wedges`
             : null}
           {state.canGoBack ? ` · ${state.path.length} level(s) in` : null}
+        </p>
+      ) : null}
+      {/*
+        Naming it, not just marking it. A red dot says "over there"; among
+        eighty tips the label is what lets someone check they are looking at
+        the leaf they asked for.
+      */}
+      {arrivedLabel ? (
+        <p className="side-counts arrival">
+          <span className="arrival-dot" aria-hidden="true" /> found{" "}
+          <strong>{arrivedLabel}</strong> from the other tree
         </p>
       ) : null}
     </div>

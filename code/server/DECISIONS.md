@@ -2884,6 +2884,27 @@ A wrong view that looks deliberate is worse than an error. The view no longer mo
 the panel says why. `test_support/renderHook` gained an async `act` so the case is actually covered:
 widening fails, the path stays empty, an error is set.
 
+### 27.4c Saying which one it is
+
+Landing in the right neighbourhood is only half of "find this leaf in the other tree". Among twenty
+tips, one of which is the answer, the panel still has to say which — so the arrival is signalled
+three ways, none of which is a legend:
+
+* the node is drawn as a **red marker**, deliberately outside the divergence ramp (blue → cyan →
+  green → yellow) so it cannot be read as a value on the scale;
+* the library **blinks** it once, which draws the eye on arrival;
+* the panel header reads **"● found 6765 from the other tree"**, naming it, because a dot says
+  "over there" and a label is what lets someone check they are looking at the leaf they asked for.
+
+The mark persists until the next ordinary navigation, which is what `arrivedAt` (the slice's `keep`,
+surfaced on `SideState`) already tracks. The blink alone would be gone by the time anyone looked
+back.
+
+**The library's `highlightByKey` had to grow an option.** It centred *and* zoomed to `ratio` 0.7,
+which on a freshly fitted twenty-leaf subtree crops the surrounding structure — the exact context
+the widening exists to provide. `highlightByKey(key, { center: false })` blinks in place; the panel
+was just re-rooted around the node, so it is on screen already.
+
 ### 27.5 The sweep
 
 `tools/validate_navigation.py` drives the real route functions — not a

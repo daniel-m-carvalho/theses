@@ -281,3 +281,20 @@ describe("moving the gradient between branches and markers", () => {
     expect(cmp.getColorTargets()).toEqual({ edges: true, nodes: true });
   });
 });
+
+describe("pointing at a node the view is already arranged around", () => {
+  it("can blink without moving the camera", () => {
+    const h = makeHarness(namedTree());
+    const cmp = new ComparisonOperator({ enabled: true, keyOf: keyByName });
+    cmp.attach(h.viewer);
+    h.render();
+    const camera = h.viewer.getRenderer()!.getCamera();
+    const before = { x: camera.x, y: camera.y, ratio: camera.ratio };
+
+    cmp.highlightByKey("a", { center: false });
+
+    // Centering zooms to 0.7, which on a freshly fitted subtree crops the
+    // structure the node was worth pointing at within.
+    expect({ x: camera.x, y: camera.y, ratio: camera.ratio }).toEqual(before);
+  });
+});
