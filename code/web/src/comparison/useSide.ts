@@ -237,13 +237,12 @@ export function useSide(
     focusWithContext: useCallback(
       (storedId: number) => {
         void api
-          // The ceiling is this panel's own budget: a subtree that fits draws
-          // every tip, so the node that was asked about is actually on screen
-          // rather than summarised behind a wedge.
-          .ancestor(treeId, storedId, {
-            minLeaves: JUMP_CONTEXT_LEAVES,
-            maxLeaves: Math.max(JUMP_CONTEXT_LEAVES, budget),
-          })
+          // No ceiling on how wide this may go. Capping it at the panel's
+          // budget looked right — a subtree that fits draws every tip — but on
+          // a ladder there is nothing between two leaves and thousands, so a
+          // quarter of jumps stopped under the floor and landed on two dots.
+          // `keep` below is what guarantees the leaf is drawn, at any size.
+          .ancestor(treeId, storedId, { minLeaves: JUMP_CONTEXT_LEAVES })
           // The node asked about is kept drawn inside whatever it widened to.
           // /ancestor cannot always stay under the ceiling — a tip whose only
           // parent is enormous leaves no choice — and without this those jumps
@@ -251,7 +250,7 @@ export function useSide(
           .then((context) => focus(context.node, storedId))
           .catch(() => focus(storedId));
       },
-      [treeId, budget, focus],
+      [treeId, focus],
     ),
 
     back: useCallback(() => {

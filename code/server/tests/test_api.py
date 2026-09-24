@@ -260,10 +260,12 @@ def test_ancestor_keeps_a_node_that_already_qualifies(client):
     }
 
 
-def test_ancestor_stops_before_overshooting_the_callers_budget(client):
-    # Ladder-shaped clades step 1, 2, thousands: the smallest ancestor meeting
-    # a floor of 20 can be most of the tree, which hides the very node that was
-    # asked about. A ceiling keeps the answer drawable.
+def test_ancestor_never_stops_short_of_the_floor(client):
+    # The regression that made this endpoint useless in practice. A ceiling
+    # used to stop the climb where a ladder offered nothing between 2 leaves
+    # and thousands, so a quarter of jumps landed under the floor and 2.4% on
+    # a two-leaf clade — which tells you the leaf exists and nothing else.
+    # Visibility is `keep`'s job now, so the climb must always reach the floor.
     slice_ = client.get("/api/v1/trees/vibrio-upgma/slice", params={"budget": 50}).json()
     tips = [
         i
@@ -272,14 +274,10 @@ def test_ancestor_stops_before_overshooting_the_callers_budget(client):
         )
         if n == 1 and not cut
     ]
+    assert tips, "the fixture must contain real leaves"
     for at in tips:
-        tip_id = slice_["nodes"]["id"][at]
-        bounded = _ancestor(client, tip_id, min_leaves=20, max_leaves=60)
-        # Never the bare tip, which is the whole point, and never the huge
-        # ancestor a bare floor would have picked — unless one step is all the
-        # topology offers, in which case too large still beats one dot.
-        assert bounded["leaves"] > 1
-        assert bounded["leaves"] <= 60 or bounded["climbed"] == 1
+        got = _ancestor(client, slice_["nodes"]["id"][at], min_leaves=20)
+        assert got["leaves"] >= 20 or got["reached_root"]
 
 
 def test_ancestor_says_when_it_ran_out_of_tree(client):

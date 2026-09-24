@@ -112,11 +112,10 @@ export const api = {
   ancestor: (
     treeId: string,
     node: number,
-    options: { minLeaves?: number; maxLeaves?: number; signal?: AbortSignal } = {},
+    options: { minLeaves?: number; signal?: AbortSignal } = {},
   ) => {
     const query = new URLSearchParams({ node: String(node) });
     if (options.minLeaves !== undefined) query.set("min_leaves", String(options.minLeaves));
-    if (options.maxLeaves !== undefined) query.set("max_leaves", String(options.maxLeaves));
     return request<NodeContext>(
       `/trees/${encodeURIComponent(treeId)}/ancestor?${query}`,
       { signal: options.signal },

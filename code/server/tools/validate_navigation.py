@@ -15,7 +15,7 @@ from phylodelta.metrics.store import CorrespondenceReader
 from phylodelta.trees.store import read_tree
 
 OWNER = "local"
-MIN_LEAVES, MAX_LEAVES = 20, 60
+MIN_LEAVES = 20
 BUDGET = 60
 fails: list[str] = []
 
@@ -115,16 +115,20 @@ def check_jumps(pair_id, left_id, right_id, L, R, shared):
                 mislabelled += 1
                 bad(f"{src_id} leaf {leaf} {src.labels[leaf]!r} -> "
                     f"{dst_id} {target} {dst.labels[target]!r}: labels differ")
-            got = tree_ancestor(tree_id=dst_id, node=target, min_leaves=MIN_LEAVES,
-                                max_leaves=MAX_LEAVES, owner=OWNER)
+            got = tree_ancestor(tree_id=dst_id, node=target,
+                                min_leaves=MIN_LEAVES, owner=OWNER)
             anc = got.node
             if not (anc <= target < dst.subtree_end[anc]):
                 bad(f"{dst_id}: {anc} is not an ancestor of {target}")
             if got.leaves != int(dst.leaf_count[anc]):
                 bad(f"{dst_id}: ancestor {anc} reported {got.leaves} leaves, "
                     f"tree says {int(dst.leaf_count[anc])}")
-            if got.leaves <= 1:
-                bad(f"{dst_id}: jump from {src_id} leaf {leaf} still lands on one dot")
+            # `> 1` was too weak a check and let the actual complaint through:
+            # a two-leaf clade is two dots and a line, which says the leaf
+            # exists and nothing about where it sits. The floor is the promise.
+            if got.leaves < MIN_LEAVES and not got.reached_root:
+                bad(f"{dst_id}: jump from {src_id} leaf {leaf} lands on "
+                    f"{got.leaves} leaves, under the {MIN_LEAVES}-leaf floor")
             if anc != target:
                 widened += 1
             sizes.append(got.leaves)
@@ -158,7 +162,7 @@ def check_jumps(pair_id, left_id, right_id, L, R, shared):
               f"(reconciliation dropped {dropped:,})  mislabelled {mislabelled:,}")
         print(f"   widened {widened:,}/{len(sizes):,}; target subtree leaves: "
               f"min {sizes.min()} median {int(np.median(sizes))} max {sizes.max()}; "
-              f"over the {MAX_LEAVES}-leaf ceiling: {(sizes > MAX_LEAVES).sum():,}")
+              f"under the {MIN_LEAVES}-leaf floor: {(sizes < MIN_LEAVES).sum():,}")
         print(f"   target leaf not drawn after widening: {invisible:,}")
 
 

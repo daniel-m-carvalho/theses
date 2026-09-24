@@ -2789,27 +2789,43 @@ anyway, because Jaccard gives a two-leaf cherry `{a, b}` an overlap of 0.5 with 
 `{a}`, which nothing beats where the trees disagree. Measured over 400 sampled leaves of
 vibrio-nj vs vibrio-upgma, that rule returned a single leaf **400 times out of 400**.
 
-### 27.2 `min_leaves` is not enough on its own
+### 27.2 A ceiling on the climb, tried and withdrawn
 
-Climbing to the first ancestor holding 20 leaves looks sufficient and is not, because branch
-lengths do not make topology. On the ladder-shaped clades UPGMA produces, a tip's ancestors step
+Climbing to the first ancestor holding 20 leaves looks sufficient and appears not to be, because
+branch lengths do not make topology. On the ladder-shaped clades UPGMA produces, a tip's ancestors
+step
 
 ```
 1 leaf  ->  2 leaves  ->  3,311 leaves
 ```
 
 so the smallest ancestor meeting a floor of 20 is a tenth of the tree — at which point the slice
-budget summarises it and the tip that was asked about **disappears behind a wedge**. Widening too
-far fails the request exactly as rooting at the tip did.
+budget summarises it and the tip that was asked about **disappears behind a wedge**.
 
-Hence a second bound, `max_leaves`, which the caller sets to **its own leaf budget**: a subtree that
-fits the budget is drawn tip for tip, so the node asked about is on screen. It overrides
-`min_leaves`, because too small is still legible and too large is not. It is deliberately **not**
-applied to the first step — a tip whose only parent is enormous has no readable ancestor, and
-returning the tip itself would be the failure this endpoint exists to prevent.
+The first answer was a second bound, `max_leaves`, set by the caller to its own leaf budget, on the
+reasoning that a subtree which fits is drawn tip for tip. **This was wrong, and it shipped.** It
+overrode `min_leaves`, so on exactly the ladders that motivated it the climb stopped at the two-leaf
+step. Measured over all 17,645 leaves of vibrio-nj -> vibrio-upgma with a 60-leaf ceiling:
 
-End to end on the pair that showed the bug (clostridium leaf `2368` -> vibrio): the match is vibrio
-leaf `2368`, widened 12 levels to a 20-leaf clade, drawn as 20 of 20 leaves with **zero wedges**,
+| widened subtree | jumps | |
+|---|---|---|
+| 2 leaves | 428 | 2.43% |
+| 3–5 leaves | 898 | 5.09% |
+| 6–19 leaves | 3,433 | 19.46% |
+| 20–60 leaves | 11,847 | 67.14% |
+| over 60 | 1,039 | 5.89% |
+
+**27% landed below the floor the endpoint exists to guarantee**, and 2.4% on two dots and a line —
+which says the leaf exists and nothing about where it sits. The user reported it from the screen
+before the sweep did, because the sweep only asserted `leaves > 1`: a test written to the bug it had
+just seen rather than to the promise being made.
+
+The ceiling is removed. Keeping the target drawn is `keep`'s job on the slice (§27.4), and `keep`
+works at any size, so the climb is free to go as wide as the floor requires. Two mechanisms for one
+problem, and the weaker one silently won.
+
+End to end on the pair that showed the original bug (clostridium leaf `2368` -> vibrio): the match
+is vibrio leaf `2368`, widened to a 20-leaf clade, drawn as 20 of 20 leaves with **zero wedges**,
 with the target leaf among them.
 
 ### 27.3 Cost
@@ -2866,18 +2882,21 @@ reimplementation — over a whole pair:
   as a leaf.
 * **Every leaf, both directions.** For each leaf: the counterpart is in range,
   its **label matches**, the widened root is a true ancestor of it by interval
-  containment, the reported size matches the tree, and slicing there actually
-  **draws the target as itself**. Leaves without a counterpart are cross-checked
+  containment, the reported size matches the tree, it holds **at least
+  `min_leaves`** unless the climb reached the root, and slicing there actually
+  **draws the target as itself**. That floor check replaced a `> 1` that let
+  two-leaf landings pass — the assertion has to be the promise, not the last
+  bug. Leaves without a counterpart are cross-checked
   against reconciliation's dropped count.
 
 Result over all three pairs — 669 navigation slices covering 63,253 leaves, and
 **every leaf of every tree jumped in both directions**:
 
-| pair | jumps checked | mislabelled | one-dot | target not drawn |
-|---|---|---|---|---|
-| vibrio-nj ↔ vibrio-upgma | 35,290 | 0 | 0 | 0 |
-| clostridium-upgma ↔ vibrio-upgma | 34,980 | 0 | 0 | 0 |
-| clostridium-upgma ↔ vibrio-nj | 34,978 | 0 | 0 | 0 |
+| pair | jumps checked | mislabelled | under the floor | target not drawn | median landing |
+|---|---|---|---|---|---|
+| vibrio-nj ↔ vibrio-upgma | 35,290 | 0 | 0 | 0 | 35 / 29 leaves |
+| clostridium-upgma ↔ vibrio-upgma | 34,980 | 0 | 0 | 0 | 35 / 51 leaves |
+| clostridium-upgma ↔ vibrio-nj | 34,978 | 0 | 0 | 0 | 29 / 51 leaves |
 
 Unmatched leaves equal reconciliation's dropped count exactly in all six
 directions (1, 156, 10,472, 10,473 …), so no leaf silently loses its

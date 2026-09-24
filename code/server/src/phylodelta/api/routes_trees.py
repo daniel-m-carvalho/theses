@@ -63,18 +63,6 @@ def tree_ancestor(
     min_leaves: int = Query(
         20, ge=1, le=MAX_BUDGET, description="Smallest subtree worth rooting a view at."
     ),
-    max_leaves: int | None = Query(
-        None,
-        ge=1,
-        le=MAX_BUDGET,
-        description=(
-            "Stop before a subtree larger than this, even if `min_leaves` was "
-            "not met. Pass the caller's own leaf budget: a subtree within it "
-            "draws every tip, so the node asked about stays visible instead of "
-            "disappearing behind a wedge. Best-effort — a node whose only "
-            "parent is larger still returns that parent, never itself."
-        ),
-    ),
     owner: str = Depends(current_owner),
 ) -> NodeContext:
     """Climb from `node` to an ancestor-or-self worth rooting a view at.
@@ -85,13 +73,15 @@ def tree_ancestor(
     panel at a single tip — a view of nothing — whenever the match was a leaf,
     which for a leaf matched by label it always is.
 
-    `min_leaves` alone is not enough, because branch lengths do not make
-    topology: on the ladder-shaped clades UPGMA produces, the ancestors of a
-    tip run 1, 2, 2478, so the smallest one meeting a floor of 20 is a tenth of
-    the tree, and the tip the caller asked about ends up summarised behind a
-    wedge. `max_leaves` keeps the answer local when the topology offers nothing
-    in between; it wins over `min_leaves`, since too small is legible and too
-    large is not.
+    There is deliberately **no ceiling**. One was tried, because on the
+    ladder-shaped clades UPGMA produces a tip's ancestors run 1, 2, 2478 — so
+    the smallest ancestor meeting a floor of 20 is a tenth of the tree, and the
+    tip ends up summarised behind a wedge. Stopping the climb early was the
+    wrong trade: a 60-leaf ceiling put **27% of jumps below the floor and 2.4%
+    on a two-leaf clade**, which on screen is two dots and a line — it says the
+    leaf exists and nothing about where it sits. Keeping the target drawn is
+    `keep`'s job on the slice (§27.4), and `keep` works at any size, so the
+    climb is free to go as wide as the floor requires.
 
     Walks the memory-mapped parent column, so it reads a handful of integers
     rather than materialising the tree.
@@ -118,12 +108,6 @@ def tree_ancestor(
             return NodeContext(
                 node=at, leaves=reader.leaf_count_of(at), climbed=climbed, reached_root=True
             )
-        # Best-effort ceiling, and deliberately not applied to the first step:
-        # a node whose only parent is enormous has no readable ancestor, and
-        # returning the node itself would be the single dot this endpoint
-        # exists to prevent. Too large beats nothing at all; too small does not.
-        if climbed and max_leaves is not None and reader.leaf_count_of(parent) > max_leaves:
-            break
         at, climbed = parent, climbed + 1
 
     return NodeContext(
