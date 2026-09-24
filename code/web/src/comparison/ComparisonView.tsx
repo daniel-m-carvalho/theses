@@ -23,7 +23,7 @@ import {
   type SequentialColorScale,
 } from "phylo-tree-viewer";
 import type { ComparisonSummary, PairSummary } from "../api/types";
-import type { ColorTarget } from "./colorTarget";
+import type { ViewOptions } from "../useUrlState";
 import { exportReport } from "../export/buildReport";
 import { ExportPanel, type ExportChoices } from "../export/ExportPanel";
 import { ContextMenu } from "../menu/ContextMenu";
@@ -190,10 +190,8 @@ export function ComparisonView({
   initial,
   onNavigate,
   isolateSets = [null, null],
-  showTyping = false,
-  showGradient = true,
-  colorTarget = "branches",
-  labelClades = false,
+  options,
+  onOptions,
   summary = null,
   exporting = false,
   onExportClose,
@@ -203,10 +201,10 @@ export function ComparisonView({
   onNavigate?: (left: number[], right: number[]) => void;
   /** Isolate-set id per side; null where that tree has no typing data. */
   isolateSets?: [string | null, string | null];
-  showTyping?: boolean;
-  showGradient?: boolean;
-  colorTarget?: ColorTarget;
-  labelClades?: boolean;
+  /** Everything the View menu and the typing footer decide; see ViewOptions. */
+  options: ViewOptions;
+  /** Report a footer change so it reaches the URL with the rest of the view. */
+  onOptions: (change: Partial<ViewOptions>) => void;
   /** The computed scalars, for the report. */
   summary?: ComparisonSummary | null;
   /** Opened from the header; the panel lives here because the viewers do. */
@@ -220,18 +218,26 @@ export function ComparisonView({
   const autoBudget = readableBudget(panelHeight);
 
   const [left, leftActions] = useSide(
-    pair.left, pair.id, "rf", initial?.left, autoBudget, labelClades,
+    pair.left, pair.id, "rf", initial?.left, autoBudget, options.cladeSizes,
   );
   const [right, rightActions] = useSide(
-    pair.right, pair.id, "rf", initial?.right, autoBudget, labelClades,
+    pair.right, pair.id, "rf", initial?.right, autoBudget, options.cladeSizes,
   );
 
   // Which typing columns to show. Several at once is allowed; see
   // `useTypingData` for what that does to a bar's length.
-  const [segmentKeys, setSegmentKeys] = useState<string[]>([]);
-  const [barScale, setBarScale] = useState<BarScale>("log");
-  const leftTyping = useTypingData(isolateSets[0], left.tree, showTyping, segmentKeys);
-  const rightTyping = useTypingData(isolateSets[1], right.tree, showTyping, segmentKeys);
+  const segmentKeys = options.columns;
+  const setSegmentKeys = useCallback(
+    (columns: string[]) => onOptions({ columns }),
+    [onOptions],
+  );
+  const barScale = options.barScale as BarScale;
+  const setBarScale = useCallback(
+    (scale: BarScale) => onOptions({ barScale: scale as ViewOptions["barScale"] }),
+    [onOptions],
+  );
+  const leftTyping = useTypingData(isolateSets[0], left.tree, options.typing, segmentKeys);
+  const rightTyping = useTypingData(isolateSets[1], right.tree, options.typing, segmentKeys);
 
   // Start on the first column the store offers, once it is known.
   const offered = leftTyping.keys.length ? leftTyping.keys : rightTyping.keys;
@@ -425,9 +431,9 @@ export function ComparisonView({
   // the operator handles.
   useEffect(() => {
     handle.current?.panels.forEach((panel) => {
-      panel.operators.comparison?.setEnabled(showGradient);
+      panel.operators.comparison?.setEnabled(options.gradient);
     });
-  }, [showGradient]);
+  }, [options.gradient]);
 
   // Move the gradient between the branches and the wedges. Both operators are
   // involved because the wedge is not a Sigma node marker but an overlay the
@@ -440,13 +446,13 @@ export function ComparisonView({
     const wedgeColor = wedgeColorFrom(built.diffScale);
     built.panels.forEach((panel) => {
       panel.operators.comparison?.setColorTargets({
-        edges: showGradient && colorTarget === "branches",
+        edges: options.gradient && options.colorTarget === "branches",
       });
       panel.operators.cladeShape?.setColor(
-        showGradient && colorTarget === "clades" ? wedgeColor : CLADE_SHAPE.color,
+        options.gradient && options.colorTarget === "clades" ? wedgeColor : CLADE_SHAPE.color,
       );
     });
-  }, [showGradient, colorTarget]);
+  }, [options.gradient, options.colorTarget]);
 
   // Feed the bar charts, and keep the legend in step with the scale that is
   // actually colouring them. The scale is primed with every category present
@@ -469,7 +475,7 @@ export function ComparisonView({
       }
       bars.setData(data);
       bars.setScale(barScale);
-      bars.setEnabled(showTyping);
+      bars.setEnabled(options.typing);
     });
     // Built from the categories **currently** shown, not from every assignment
     // the scale has ever made. The scale accumulates across segment keys and
@@ -486,7 +492,7 @@ export function ComparisonView({
         ? current
         : next,
     );
-  }, [showTyping, leftTyping, rightTyping, barScale]);
+  }, [options.typing, leftTyping, rightTyping, barScale]);
 
   // Re-measure on resize, so the detail tracks the window rather than a
   // constant chosen for whatever window it was written on.
@@ -530,10 +536,10 @@ export function ComparisonView({
             title: choices.title,
             images,
             showing: { left: showing(left), right: showing(right) },
-            typing: showTyping ? { columns: segmentKeys, scale: barScale } : null,
-            gradient: showGradient,
-            gradientOn: colorTarget,
-            swatches: showTyping ? swatches : undefined,
+            typing: options.typing ? { columns: segmentKeys, scale: barScale } : null,
+            gradient: options.gradient,
+            gradientOn: options.colorTarget,
+            swatches: options.typing ? swatches : undefined,
             // The ends of the scale the operator actually draws with, rather
             // than colours named here that could drift from it.
             gradientEnds: {
@@ -555,11 +561,11 @@ export function ComparisonView({
       summary,
       left,
       right,
-      showTyping,
+      options.typing,
       segmentKeys,
       barScale,
-      showGradient,
-      colorTarget,
+      options.gradient,
+      options.colorTarget,
       swatches,
       onExportClose,
     ],
@@ -594,7 +600,7 @@ export function ComparisonView({
         <Panel host={rightHost} state={right} />
       </div>
 
-      {showTyping ? (
+      {options.typing ? (
         <TypingLegend
           assignments={swatches}
           segmentKeys={segmentKeys}

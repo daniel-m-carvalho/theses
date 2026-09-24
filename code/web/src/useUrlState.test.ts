@@ -8,7 +8,7 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 import { act, renderHook } from "./test_support/renderHook";
-import { useUrlState } from "./useUrlState";
+import { DEFAULT_OPTIONS, useUrlState } from "./useUrlState";
 
 describe("view state in the URL", () => {
   beforeEach(() => {
@@ -31,6 +31,7 @@ describe("view state in the URL", () => {
       comparison: "a__b",
       left: [3, 900],
       right: [12],
+      options: DEFAULT_OPTIONS,
     });
   });
 
@@ -51,6 +52,54 @@ describe("view state in the URL", () => {
     window.history.replaceState(null, "", "#something-else");
     const { result } = renderHook(() => useUrlState());
     expect(result.current[0].comparison).toBeNull();
+  });
+
+  it("round-trips the view options, writing only what differs from the default", () => {
+    // The bug: the View menu remembered the choice and the URL did not, so a
+    // refresh restored the navigation with the presentation reset under it.
+    const { result } = renderHook(() => useUrlState());
+    act(() =>
+      result.current[1]({
+        comparison: "a__b",
+        left: [],
+        right: [],
+        options: {
+          ...DEFAULT_OPTIONS,
+          gradient: false,
+          colorTarget: "clades",
+          typing: true,
+          columns: ["country", "year, collected"],
+          cladeSizes: true,
+        },
+      }),
+    );
+
+    const restored = renderHook(() => useUrlState()).result.current[0].options;
+    expect(restored.gradient).toBe(false);
+    expect(restored.colorTarget).toBe("clades");
+    expect(restored.typing).toBe(true);
+    // A column name may contain the separator any joined encoding would use.
+    expect(restored.columns).toEqual(["country", "year, collected"]);
+    expect(restored.cladeSizes).toBe(true);
+    // Untouched defaults stay out of the URL.
+    expect(window.location.hash).not.toContain("bs=");
+  });
+
+  it("keeps the options when a write states only the navigation", () => {
+    // Focusing a subtree must not silently reset the colouring.
+    const { result } = renderHook(() => useUrlState());
+    act(() =>
+      result.current[1]({
+        comparison: "a__b",
+        left: [],
+        right: [],
+        options: { ...DEFAULT_OPTIONS, typing: true },
+      }),
+    );
+    act(() => result.current[1]({ comparison: "a__b", left: [7], right: [] }));
+
+    expect(result.current[0].options.typing).toBe(true);
+    expect(result.current[0].left).toEqual([7]);
   });
 
   it("does not add a history entry per expansion", () => {

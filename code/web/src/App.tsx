@@ -10,8 +10,8 @@ import { api, ApiError } from "./api/client";
 import { ComparisonView } from "./comparison/ComparisonView";
 import { UploadPanel } from "./upload/UploadPanel";
 import { CheckboxMenu } from "./ui/CheckboxMenu";
-import { useUrlState } from "./useUrlState";
-import { COLOR_TARGETS, type ColorTarget } from "./comparison/colorTarget";
+import { useUrlState, type ViewOptions } from "./useUrlState";
+import { COLOR_TARGETS } from "./comparison/colorTarget";
 import type {
   ComparisonSummary,
   DatasetsResponse,
@@ -23,13 +23,26 @@ export function App() {
   const [me, setMe] = useState<WhoAmI | null>(null);
   const [pairs, setPairs] = useState<PairSummary[]>([]);
   const [datasets, setDatasets] = useState<DatasetsResponse | null>(null);
-  const [showTyping, setShowTyping] = useState(false);
-  // Divergence colouring is on by default: it is what the comparison is for.
-  const [showGradient, setShowGradient] = useState(true);
-  const [colorTarget, setColorTarget] = useState<ColorTarget>("branches");
-  const [labelClades, setLabelClades] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [view, setView] = useUrlState();
+
+  /*
+   * The View menu reads and writes the URL directly rather than keeping its
+   * own copy. Two sources of truth for the same switch is how they came to
+   * disagree: the menu remembered the choice, the URL did not, and a refresh
+   * restored the navigation with the presentation reset under it.
+   */
+  const options = view.options;
+  const setOptions = useCallback(
+    (change: Partial<ViewOptions>) =>
+      setView({
+        comparison: view.comparison,
+        left: view.left,
+        right: view.right,
+        options: { ...view.options, ...change },
+      }),
+    [setView, view],
+  );
   const [chosen, setChosen] = useState<PairSummary | null>(null);
   const [summary, setSummary] = useState<ComparisonSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -102,28 +115,28 @@ export function App() {
               {
                 key: "gradient",
                 label: "Divergence",
-                checked: showGradient,
-                note: "colour branches by how much the trees disagree",
+                checked: options.gradient,
+                note: "colour by how much the trees disagree",
               },
               {
                 key: "typing",
                 label: "Typing data",
-                checked: showTyping,
+                checked: options.typing,
                 note: "a bar of isolates on each leaf",
               },
               {
                 key: "clades",
                 label: "Clade sizes",
-                checked: labelClades,
+                checked: options.cladeSizes,
                 note: "label every collapsed clade with its leaf count",
               },
               // Where the gradient lands, not whether it is on — so the choice
               // is offered only while there is one to place.
-              ...(showGradient
+              ...(options.gradient
                 ? COLOR_TARGETS.map((target, index) => ({
                     key: `colour:${target.key}`,
                     label: target.label,
-                    checked: colorTarget === target.key,
+                    checked: options.colorTarget === target.key,
                     note: target.note,
                     group: "colour-target",
                     heading: index === 0 ? "Colour the divergence on" : undefined,
@@ -131,11 +144,13 @@ export function App() {
                 : []),
             ]}
             onToggle={(key) => {
-              if (key === "gradient") setShowGradient((on) => !on);
-              if (key === "typing") setShowTyping((on) => !on);
-              if (key === "clades") setLabelClades((on) => !on);
+              if (key === "gradient") setOptions({ gradient: !options.gradient });
+              if (key === "typing") setOptions({ typing: !options.typing });
+              if (key === "clades") setOptions({ cladeSizes: !options.cladeSizes });
               if (key.startsWith("colour:")) {
-                setColorTarget(key.slice("colour:".length) as ColorTarget);
+                setOptions({
+                  colorTarget: key.slice("colour:".length) as ViewOptions["colorTarget"],
+                });
               }
             }}
           />
@@ -179,10 +194,8 @@ export function App() {
             }
             onNavigate={(l, r) => setView({ comparison: chosen.id, left: l, right: r })}
             isolateSets={isolateSetsFor(chosen, datasets)}
-            showTyping={showTyping}
-            showGradient={showGradient}
-            colorTarget={colorTarget}
-            labelClades={labelClades}
+            options={options}
+            onOptions={setOptions}
             summary={summary}
             exporting={exporting}
             onExportClose={() => setExporting(false)}
