@@ -22,7 +22,7 @@ fi
 
 # --- sdsl-lite v3 (BSD-3-Clause, header-only) -------------------------------
 # NOT simongog/sdsl-lite, which is GPL-3.0 and would make the combined work
-# GPL-3.0 — this repository is MIT. See DECISIONS.md, References and provenance.
+# GPL-3.0 — this repository is MIT. See DECISIONS.md at the repository root, References and provenance.
 if [ ! -d "$HERE/sdsl-lite/include" ]; then
   echo "fetching sdsl-lite v3..."
   git clone --depth 1 https://github.com/xxsds/sdsl-lite.git "$HERE/sdsl-lite"

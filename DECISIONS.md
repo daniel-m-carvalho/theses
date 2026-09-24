@@ -1,7 +1,13 @@
 # Design record
 
-The reasoning behind this backend: every decision with the alternatives that were weighed against
-it, why it went the way it did, and the measurement or observation that settled it.
+The reasoning behind **the whole project** — the rendering library (`code/lib`), the backend
+(`code/server`) and the frontend (`code/web`): every decision with the alternatives that were
+weighed against it, why it went the way it did, and the measurement or observation that settled it.
+
+One file rather than three, because the decisions do not divide that way. Where the slicing budget
+is chosen is a question about the browser's drawing rate and the server's summariser at the same
+time; whether the export belongs to the library or the app is a question about what the library is
+*for*. Splitting them by directory would file each argument under one of its halves.
 
 It is written **as decisions are made**, one section per milestone, because the alternatives and the
 evidence are the parts that stop being recoverable once the code exists. It feeds two thesis
@@ -3011,6 +3017,141 @@ and the client already skips nulls, so nothing was wrong with the product — bu
 an unsigned sentinel has now produced a false negative, a real bug and a broken
 test in three separate places. Anything reading these columns directly must
 translate first.
+
+---
+
+## 28. The library: what belongs in it, and what does not
+
+Moved here from `code/lib/README.md`, which keeps the module map and the API surface. The *why*
+lives in one file; the *what* lives beside the code it describes.
+
+### 28.1 The boundary
+
+`phylo-tree-viewer` is a standalone npm package and is **backend-agnostic**. Nothing under its
+`src/` imports anything outside it, which is what makes it publishable and is checked rather than
+asserted. The dependency arrow points one way: app → lib.
+
+**Data in, not fetch.** The library takes trees, isolate counts and colours through options and
+setters and never makes a request. That is what lets the same package serve `lib_demo`, which reads
+static files, and `web`, which reads a slicing API — two consumers whose data sources have nothing
+in common.
+
+**Composable operators.** Each interaction is an operator in its own file, talking to the viewer
+only through its public surface: events, the node- and edge-reducer pipelines, the collapse hook and
+the right-reserve hook. Any subset attaches to any viewer, and two viewers stay independent. This is
+what made the comparison view possible without a "comparison mode" inside the viewer.
+
+**Structure-preserving transforms.** Sibling ordering and reflection change the drawing, never the
+topology, the parent/child links or the branch lengths. A displayed tree is always a legal
+representation of the input.
+
+### 28.2 What the server pushed back into the library
+
+Three things arrived from the frontend and were deliberately pushed down into the library, each for
+the same reason: they are statements about *how a comparison is presented*, and the library is what
+presents it.
+
+* **`trueLeafCount`** (§4.3). A server-summarised clade has no children to count, so walking it
+  reports 1 and every wedge draws at minimum size regardless of whether it hides ten leaves or ten
+  thousand. The consumer supplies the real count.
+* **Honouring an incoming `collapsed` flag.** `prepareTree` decided collapse with a predicate, so a
+  server that had already decided which clades were wedges could not say so and they rendered as
+  leaves.
+* **The comparison report** (`export/comparison_report.ts`). The frontend built it first. It was
+  moved because the panels, the gradient, the wedges and the bars are all drawn here: a report
+  assembled elsewhere describes a picture it cannot see. What stayed in the app is the one thing the
+  library must not know — the shape of this backend's JSON.
+
+### 28.3 Export: one layout, three files
+
+`renderReport` produces HTML. The PNG and PDF are **rasterised from that same HTML** rather than
+laid out again, through an SVG `foreignObject` — the technique `snapshot.ts` already uses for the
+panel overlays. Re-implementing the layout per format is how two of the three quietly stop matching
+the third.
+
+The PDF is written by hand rather than with a library: a page per slice, each carrying a JPEG,
+because a PDF embeds JPEG verbatim (`DCTDecode`) while a PNG would have to be decoded and
+re-deflated. That is where a hand-rolled writer would stop being worth it.
+
+Two bugs shipped in the first version of this and were found by opening the file, not by a test:
+
+1. The report's CSS was scoped to `body`, and a `foreignObject`'s root is a plain `div`, so **none
+   of it applied** — the PDF came out in the browser's default serif with its text against the left
+   edge. The rules are scoped to `.report` now, which the `body` also carries.
+2. Height was measured before the embedded images had decoded, so the figures measured zero, the
+   document was rasterised taller than the canvas, and the last third was **cut off**. `measure`
+   awaits `img.decode()` first.
+
+Both are the same lesson: a rasteriser is only as correct as the layout it measures, and neither
+failure is visible from inside the code.
+
+---
+
+## 29. The frontend: a thin seam over a slicing API
+
+`code/web` is React 19 + Vite. It owns navigation and menus; the library owns rendering. The seam is
+narrow on purpose.
+
+### 29.1 One `createComparison`, then `setTree`
+
+The two panels are built **once**. Navigation replaces their contents rather than rebuilding them,
+because tearing down and re-creating two Sigma renderers on every expansion is expensive and loses
+the camera. Providers are read through refs rather than captured, since the library keeps the
+functions it was given at construction and a closure over the first slice would serve it forever.
+
+### 29.2 The budget is a property of the viewport
+
+How many leaves to ask for is computed from the panel's measured height at ~14px a leaf, quantised
+to 25 so a layout settling from 600px to 577px does not cost a second request. It returns **zero**
+before measurement rather than a placeholder, so a panel makes one request instead of two.
+
+This replaced a fixed budget of 400, which in a 700px panel is 1.7px a leaf: the terminals fused
+into a solid black bar. Asking the server for more than the client can draw is this project's
+central failure in miniature — the request succeeds, the bytes arrive, and the picture is worse.
+
+### 29.3 The URL names what is on screen
+
+Comparison, both navigation paths, and every view option are in the hash. Refreshing a view of two
+17,645-leaf trees must come back to it, and a link that does not carry the presentation would show
+the recipient a different figure from the one being described. Only non-defaults are written, so old
+links still open. `replaceState`, not a hash assignment, or Back would mean "undo one expand".
+
+Keeping the options in `App`'s state while the navigation lived in the URL is exactly how the two
+came to disagree — a refresh restored the trees with the colouring reset under them.
+
+### 29.4 Menus answer, they do not grey out
+
+A context menu item is **omitted** when it could never apply where the menu was opened, and **shown
+with a reason** when it applies but cannot run. The one deliberate exception is "Find this leaf in
+the other tree" for a leaf with no counterpart: *not in the other tree* is the result of asking, not
+a reason the question cannot be put, so it stays clickable and reports (§27.4d). A clade is refused
+outright, because there the action is the wrong tool — a clade corresponds by best overlap, and
+offering to jump presents a guess as a location.
+
+### 29.5 What the panels are told, and what they work out
+
+The frontend never invents a comparison value. `similarity` is carried **on the node** rather than
+looked up by id, because a stored id is a pre-order index *within one tree* and the two trees'
+ranges overlap — a lookup painted one panel with the other tree's numbers. Divergence is `1 −
+similarity`, and feeding the raw similarity to a scale labelled identical → diverged drew every
+shared clade at the diverged end.
+
+### 29.6 Robustness, measured rather than assumed
+
+Two tools, deliberately different in kind:
+
+* `code/server/tools/validate_navigation.py` — expands every wedge of a tree until it is exhausted
+  and jumps **every leaf in both directions**, checking one invariant exhaustively against the real
+  route functions (§27.5).
+* `code/server/tools/simulate_usage.py` — walks the API over HTTP the way the frontend does, through
+  the middleware, validation and JSON serialisation, and spends most of its effort on what a client
+  can get *wrong*: budget and root boundaries, eight refusal cases including path traversal in a
+  tree id, a real upload through to ready and sliceable, three bad uploads, delete and
+  double-delete, and 36 concurrent slices. **54 checks, 0 failures.**
+
+The happy path is covered by the unit suites; a server is robust to the extent that it says no
+clearly, which is what the second tool measures.
+
 
 ---
 

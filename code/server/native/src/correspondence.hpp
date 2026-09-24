@@ -1,6 +1,6 @@
 // Best corresponding clade, by maximum Jaccard overlap of leaf sets.
 //
-// The measure is Phylo.io's (see DECISIONS.md, References and provenance);
+// The measure is Phylo.io's (see DECISIONS.md at the repository root, References and provenance);
 // what differs here is that it is exact and computed offline rather than
 // approximated with MinHash/LSH in a browser. This is the expensive half of a
 // comparison — 12.6 s of the 13 s a pair took in Python — and it is shared by

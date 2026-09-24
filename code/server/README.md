@@ -6,7 +6,7 @@ metadata for the leaves currently on screen.
 The design goal is client-side: keep browser time and memory bounded while navigating trees of
 500k+ nodes. Everything expensive is computed **once, offline**; a request is a memory-mapped read.
 Backend computation time is explicitly not what this project measures — see
-**[DECISIONS.md](DECISIONS.md)** for that argument and every other design decision, with the
+**[DECISIONS.md](../../DECISIONS.md)** for that argument and every other design decision, with the
 evidence behind it.
 
 What that buys, measured on the real data:
@@ -196,7 +196,7 @@ like is entirely yours.
 
 **`exact` saturates and should not drive a colour scale.** 98.3% of clades above 1,000 leaves come
 back "different", because one misplaced leaf invalidates every ancestor. Use `similarity` for the
-gradient and `exact` as an overlay or filter. §2.7 of DECISIONS.md has the measurements.
+gradient and `exact` as an overlay or filter. §2.7 of the root DECISIONS.md has the measurements.
 
 ### 5. Navigating toward the differences
 

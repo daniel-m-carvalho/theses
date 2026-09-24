@@ -22,6 +22,12 @@ Then open <http://localhost:5173/>. Needs Node 20.19+ / 22.12+ / 23+.
 requirements, what to look at once it opens, how to run the tests, and
 troubleshooting.
 
+## The design record
+
+**[DECISIONS.md](DECISIONS.md)** holds the reasoning for the whole project — library, backend and
+frontend — with the alternatives weighed against each decision and the measurement that settled it,
+including the ones that were tried and withdrawn.
+
 ## Where things are
 
 | Path | |

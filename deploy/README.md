@@ -56,7 +56,7 @@ share one origin and no CORS configuration is involved.
 **The demo does not use the API.** `lib_demo` was written before the backend
 existed and reads its trees from files it bundles. The proxy is wired and ready,
 but until a frontend is written against the slicing API the two containers are
-independent. See DECISIONS.md — `lib_demo` is deliberately frozen.
+independent. See [DECISIONS.md](../DECISIONS.md) — `lib_demo` is deliberately frozen.
 
 **Nothing computes on request.** Every API request is a memory-mapped read;
 comparisons are precomputed by `build-all`. If users are to upload their own

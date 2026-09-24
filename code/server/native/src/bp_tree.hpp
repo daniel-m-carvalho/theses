@@ -3,7 +3,7 @@
 // The operations TreeDiff added to sdsl's header, reimplemented here from stock
 // sdsl-lite v3 primitives rather than vendored. That is a licensing decision as
 // well as a practical one: TreeDiff and the sdsl it copies are GPL-3.0 and this
-// repository is MIT (DECISIONS.md, References and provenance). Each is a thin
+// repository is MIT (DECISIONS.md at the repository root, References and provenance). Each is a thin
 // wrapper; what matters is that v3 provides the primitives they need.
 
 #pragma once

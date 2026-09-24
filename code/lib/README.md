@@ -31,29 +31,9 @@ the library project-agnostic and is the key boundary that makes it reusable.
 
 ## 2. Design principles
 
-- **Library vs application boundary.** This is a standalone npm package
-  (`phylo-tree-viewer`); everything in it is reusable and backend-agnostic. The
-  demo application (`../lib_demo/`) is the only project-specific glue: it fetches
-  dataset files, builds panels, wires the toolbar, and supplies isolate data. The
-  dependency arrow points one way: `app → lib`. No library module imports the app
-  — verified: nothing under `src/` imports anything outside it, which is what
-  makes this package publishable.
-- **Data in, not fetch.** The library accepts data (trees, isolate counts,
-  colors) through constructor options and setters. It never fetches.
-- **Composable operators.** Each interaction is an independent operator in its
-  own file. Operators communicate with the viewer only through its public
-  surface — events, the node-reducer pipeline, the collapse hook, and the
-  right-reserve hook — so any subset can be attached to any viewer, and two
-  viewers stay independent.
-- **Extensible layout.** New layout styles are added by implementing a
-  `LayoutEngine` and registering it; the rest of the pipeline is untouched.
-- **Structure-preserving transforms.** Operations that reorganize the tree
-  visually (sibling ordering / "branch rotation", reflection) never alter
-  topology, parent/child links, or branch lengths — only the visual
-  arrangement — so the displayed tree is always a legal representation of the
-  input.
-- **Single public entry point.** Consumers import from `./lib` (the barrel in
-  `index.ts`); internal module paths are private.
+Moved to **[DECISIONS.md §28](../../DECISIONS.md)** at the repository root, with the rest of the
+project's design record. Two copies of an argument drift; this file keeps the module map and the
+API surface, which belong beside the code they describe.
 
 ---
 
