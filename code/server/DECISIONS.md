@@ -2890,18 +2890,30 @@ Landing in the right neighbourhood is only half of "find this leaf in the other 
 tips, one of which is the answer, the panel still has to say which — so the arrival is signalled
 three ways, none of which is a legend:
 
-* the node **flashes five times** in red — deliberately outside the divergence ramp (blue → cyan →
-  green → yellow) so it cannot be read as a value on the scale — and is dark between flashes,
-  because what draws the eye is the change rather than the colour;
-* the panel header reads **"found 6765 from the other tree"**, naming it, because a flash says
-  "over there" and a label is what lets someone check they are looking at the leaf they asked for.
-
-A first version left the marker on permanently, driven by `arrivedAt` (the slice's `keep`, surfaced
-on `SideState`) through a node reducer. Withdrawn: a permanent mark goes on claiming the node is
-special for as long as the panel is open, when what actually happened is that the view came here
-once — and it competes with the divergence colouring for the same attention. The header line is
-what remains afterwards, which is the part worth keeping. `flashes` and `flashInterval` are
+The node **flashes five times** in red — deliberately outside the divergence ramp (blue → cyan →
+green → yellow) so it cannot be read as a value on the scale — and is dark between flashes, because
+what draws the eye is the change rather than the colour. `flashes` and `flashInterval` are
 comparison options, so the count is the caller's decision rather than a constant in the library.
+
+**Nothing is said when it works.** A successful jump is already visible — the panel moved and the
+leaf flashed — so a line naming it is noise on a screen that already holds two trees. Only failure
+speaks, as a modal (`ui/Notice`), because a jump that does not happen leaves the panel it would have
+changed looking perfectly fine: a quiet note beside it reads as decoration rather than as the answer
+to what was just clicked. That is also why it is `jumpError` on `SideState` and not `error`, which
+describes the slice on screen.
+
+**The signal is consumed; the state is not.** Two earlier versions were wrong here:
+
+1. A permanent marker, painted by a node reducer from `arrivedAt`. It went on claiming the node was
+   special for as long as the panel stayed open, when what happened is that the view came here once,
+   and it competed with the divergence colouring for the same attention.
+2. Flashing whenever `arrivedAt` was set. `arrivedAt` *must* persist — it is the slice's `keep`, so
+   the node stays drawn on any later re-slice of the same root — but the signal must not. After a
+   second jump the other way **both panels lit up**, the one just navigated to and the one still
+   holding the previous arrival, and every window resize replayed it.
+
+So the view records each arrival as spent once flashed, and resets that when the panel navigates
+away, so the same leaf arriving again is a new arrival.
 
 **The library's `highlightByKey` had to grow an option.** It centred *and* zoomed to `ratio` 0.7,
 which on a freshly fitted twenty-leaf subtree crops the surrounding structure — the exact context

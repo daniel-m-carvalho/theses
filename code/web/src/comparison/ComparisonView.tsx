@@ -27,6 +27,7 @@ import type { ViewOptions } from "../useUrlState";
 import { exportReport } from "../export/buildReport";
 import { ExportPanel, type ExportChoices } from "../export/ExportPanel";
 import { ContextMenu } from "../menu/ContextMenu";
+import { Notice } from "../ui/Notice";
 import { TypingLegend } from "../typing/TypingLegend";
 import { datumFor, useTypingData } from "../typing/useTypingData";
 import { buildMenu, menuTitle, type PendingMenu } from "./menuItems";
@@ -438,12 +439,21 @@ export function ComparisonView({
   }, [right.tree]);
 
   /*
-   * Point at the leaf the jump was aimed at.
+   * Flash the leaf a jump was aimed at — once, on the panel it arrived in.
    *
-   * After the slice, not with it: the keys the reducer matches on are minted
-   * by the library during layout, so nothing can be marked until the new slice
-   * has rendered. `left.slice`/`right.slice` in the deps is what waits for it.
+   * `arrivedAt` persists, because the slice needs it as `keep` so the node
+   * stays drawn on any later re-slice of the same root. The *signal* must not:
+   * flashing whenever it happens to be set meant that after a second jump the
+   * other way, both panels lit up — the one that had just been navigated to
+   * and the one still holding the previous arrival — and every window resize
+   * replayed it. So the arrival is consumed: once flashed, it is recorded as
+   * spent and never flashes again.
+   *
+   * After the slice, not with it: the keys the highlight matches on are minted
+   * by the library during layout, so nothing can be pointed at until the new
+   * slice has rendered.
    */
+  const flashed = useRef<[number | null, number | null]>([null, null]);
   useEffect(() => {
     const built = handle.current;
     if (!built) return;
@@ -451,13 +461,21 @@ export function ComparisonView({
       const side = index as 0 | 1;
       refreshKeys(side, panel.viewer);
       const wanted = sides.current[side].arrivedAt;
-      if (wanted === null) return;
+      if (wanted === null) {
+        // Navigated away: the next arrival here is a new one, even if it is
+        // the same leaf.
+        flashed.current[side] = null;
+        return;
+      }
+      if (flashed.current[side] === wanted) return;
       const label = sides.current[side].tree?.byStoredId.get(wanted)?.name;
+      if (!label) return;
+      flashed.current[side] = wanted;
       // The flashing is the library's, and it keys by name — which is what
       // `keyBy: "name"` means here, and is exact for a leaf. Not its camera
       // move: the panel was just re-rooted around this node, and centring
       // zooms in far enough to crop the neighbourhood that is the point.
-      if (label) panel.operators.comparison?.highlightByKey(label, { center: false });
+      panel.operators.comparison?.highlightByKey(label, { center: false });
     });
   }, [left.slice, right.slice, left.arrivedAt, right.arrivedAt, refreshKeys]);
 
@@ -614,6 +632,13 @@ export function ComparisonView({
 
   const dismiss = useCallback(() => setMenu(null), []);
 
+  // Whichever panel could not be reached; only one jump is ever in flight.
+  const jumpFailure = left.jumpError
+    ? { reason: left.jumpError, dismiss: leftActions.dismissJumpFailure }
+    : right.jumpError
+      ? { reason: right.jumpError, dismiss: rightActions.dismissJumpFailure }
+      : null;
+
   // A menu opened on empty canvas still acts on the selected node, if there is
   // one — selecting and then right-clicking is the flow the menus were asked
   // for, and it is also the only way to reach a node too small to hit.
@@ -665,6 +690,19 @@ export function ComparisonView({
         />
       ) : null}
 
+      {/*
+        Only failure speaks. A jump that worked is visible — the panel moved
+        and the leaf flashed — so saying so as well is noise on a screen that
+        already has two trees on it.
+      */}
+      {jumpFailure ? (
+        <Notice
+          title="That leaf could not be located"
+          detail={jumpFailure.reason}
+          onDismiss={jumpFailure.dismiss}
+        />
+      ) : null}
+
       {resolved ? (
         <ContextMenu
           at={resolved.at}
@@ -703,9 +741,6 @@ function Side({
   selected: number | null;
 }) {
   const slice = state.slice;
-  const arrived =
-    state.arrivedAt !== null ? state.tree?.byStoredId.get(state.arrivedAt) : undefined;
-  const arrivedLabel = (arrived?.metadata?.label as string) || arrived?.name || null;
   return (
     <div className="side-summary">
       <p className="side-name">
@@ -723,16 +758,6 @@ function Side({
             ? ` · ${slice.hidden_leaves.toLocaleString()} behind wedges`
             : null}
           {state.canGoBack ? ` · ${state.path.length} level(s) in` : null}
-        </p>
-      ) : null}
-      {/*
-        Naming it, not just marking it. A red dot says "over there"; among
-        eighty tips the label is what lets someone check they are looking at
-        the leaf they asked for.
-      */}
-      {arrivedLabel ? (
-        <p className="side-counts arrival">
-          found <strong>{arrivedLabel}</strong> from the other tree
         </p>
       ) : null}
     </div>

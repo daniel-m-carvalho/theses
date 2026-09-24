@@ -89,6 +89,9 @@ describe("arriving from the other panel", () => {
     await actAsync(() => result.current[1].focusWithContext(leaf));
 
     expect(result.current[0].path).toEqual([]);
-    expect(result.current[0].error).toMatch(/where 3296 sits/);
+    // Reported separately from `error`, which describes the slice on screen:
+    // this view is still perfectly valid, it is the move that did not happen.
+    expect(result.current[0].jumpError).toMatch(/could not work out where/i);
+    expect(result.current[0].error).toBeNull();
   });
 });

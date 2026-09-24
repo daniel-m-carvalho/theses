@@ -481,9 +481,35 @@ body {
 .export-error { color: var(--danger); font-size: 13px; margin: 12px 0 0; }
 .export-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
 
-/* Where a cross-tree jump landed. The node itself only flashes, so this line
-   is what remains once it has; it names the leaf, which is what lets someone
-   confirm they got the one they asked for. */
-.side-counts.arrival {
+/* Said only when an action cannot happen. It sits over the panels because the
+   thing it reports is the absence of a change there. */
+.notice-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 18, 22, 0.35);
+  z-index: 50;
+}
+
+.notice {
+  max-width: 420px;
+  padding: 20px 22px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  box-shadow: 0 12px 32px rgba(15, 18, 22, 0.22);
+}
+
+.notice-title {
+  margin: 0 0 8px;
+  font-weight: 600;
   color: var(--ink);
+}
+
+.notice-detail {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--muted);
 }

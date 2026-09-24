@@ -107,6 +107,14 @@ export interface SideState {
    * of which is the answer, the panel still has to say which.
    */
   arrivedAt: number | null;
+  /**
+   * Why a jump into this panel could not be made, if one could not.
+   *
+   * Separate from `error`, which is about the slice on screen: this is about a
+   * move that never happened, so the view is still valid and only the request
+   * failed.
+   */
+  jumpError: string | null;
 }
 
 export interface SideActions {
@@ -122,6 +130,9 @@ export interface SideActions {
    * back to the bare node if that call fails is still better than not moving.
    */
   focusWithContext: (storedId: number) => void;
+  /** Report that a jump into this panel is impossible, for the view to show. */
+  reportJumpFailure: (reason: string) => void;
+  dismissJumpFailure: () => void;
   back: () => void;
   reset: () => void;
   setBudget: (budget: number) => void;
@@ -166,6 +177,7 @@ export function useSide(
    * has moved on from.
    */
   const [keep, setKeep] = useState<number | null>(null);
+  const [jumpError, setJumpError] = useState<string | null>(null);
   // Follows the viewport until the user overrides it with expand/collapse all.
   const [overridden, setOverridden] = useState(false);
 
@@ -264,14 +276,18 @@ export function useSide(
             // added to remove, with nothing on screen to say a call had
             // failed. A wrong view that looks deliberate is worse than an
             // error, so the view does not move and the panel says why.
-            setError(
-              `Could not work out where ${storedId} sits in ${treeId}: ` +
-                `${failed instanceof ApiError ? failed.message : String(failed)}`,
+            setJumpError(
+              `Could not work out where that leaf sits in ${treeId}. ` +
+                (failed instanceof ApiError ? failed.message : String(failed)),
             );
           });
       },
-      [treeId, focus, setError],
+      [treeId, focus],
     ),
+
+    reportJumpFailure: useCallback((reason: string) => setJumpError(reason), []),
+
+    dismissJumpFailure: useCallback(() => setJumpError(null), []),
 
     back: useCallback(() => {
       setKeep(null);
@@ -314,6 +330,7 @@ export function useSide(
       error,
       path,
       arrivedAt: keep,
+      jumpError,
       canGoBack: path.length > 0,
     },
     actions,

@@ -28,6 +28,7 @@ function sideOf(over: Partial<SideState> = {}): SideState {
     error: null,
     path: [],
     arrivedAt: null,
+    jumpError: null,
     canGoBack: false,
     ...over,
   };
@@ -39,6 +40,8 @@ function actions(): SideActions & { calls: string[] } {
     calls,
     focus: vi.fn((id: number) => calls.push(`focus:${id}`)),
     focusWithContext: vi.fn((id: number) => calls.push(`focusWithContext:${id}`)),
+    reportJumpFailure: vi.fn((why: string) => calls.push(`jumpFailure:${why}`)),
+    dismissJumpFailure: vi.fn(),
     back: vi.fn(() => calls.push("back")),
     reset: vi.fn(() => calls.push("reset")),
     setBudget: vi.fn(),

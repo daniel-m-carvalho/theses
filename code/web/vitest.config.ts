@@ -5,7 +5,7 @@ export default defineConfig({
     // jsdom for the hooks that touch window.location and the DOM; the pure
     // modules do not care either way.
     environment: "jsdom",
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
     globals: false,
   },
 });
