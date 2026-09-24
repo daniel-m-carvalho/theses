@@ -87,6 +87,17 @@ export type { BarChartOptions, BarScale } from "./presentation/operators/barchar
 export { ComparisonOperator } from "./presentation/operators/comparison";
 export type { ComparisonOptions, ComparisonMode } from "./presentation/operators/comparison";
 
+// --- Export (generic: the app decides what goes in a report) ---
+export { renderReport } from "./presentation/export/report";
+export type {
+  Report,
+  ReportSection,
+  ReportField,
+  ReportImage,
+} from "./presentation/export/report";
+export { snapshotViewer } from "./presentation/export/snapshot";
+export type { SnapshotOptions } from "./presentation/export/snapshot";
+
 // --- Performance layer (generic caching; no tree/Sigma/API knowledge) ---
 export { CacheManager } from "./performance/cache_manager";
 export type { CacheManagerOptions, CacheCallback } from "./performance/cache_manager";

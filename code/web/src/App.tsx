@@ -24,6 +24,7 @@ export function App() {
   const [showTyping, setShowTyping] = useState(false);
   // Divergence colouring is on by default: it is what the comparison is for.
   const [showGradient, setShowGradient] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [view, setView] = useUrlState();
   const [chosen, setChosen] = useState<PairSummary | null>(null);
   const [summary, setSummary] = useState<ComparisonSummary | null>(null);
@@ -71,9 +72,9 @@ export function App() {
         <span className="spacer" />
         {summary ? (
           <span className="headline" title="Robinson-Foulds distance">
-            RF <strong>{summary.summary.rf?.toLocaleString()}</strong>
+            RF <strong>{Number(summary.summary.rf).toLocaleString()}</strong>
             {summary.summary.rf_normalised !== undefined ? (
-              <em> ({summary.summary.rf_normalised.toFixed(3)} normalised)</em>
+              <em> ({Number(summary.summary.rf_normalised).toFixed(3)} normalised)</em>
             ) : null}
           </span>
         ) : null}
@@ -111,6 +112,16 @@ export function App() {
           <button
             type="button"
             className="back-button"
+            onClick={() => setExporting(true)}
+            title="A report with the trees as shown and the comparison values"
+          >
+            Export
+          </button>
+        ) : null}
+        {chosen ? (
+          <button
+            type="button"
+            className="back-button"
             onClick={() => {
               setChosen(null);
               setView({ comparison: null, left: [], right: [] });
@@ -138,6 +149,9 @@ export function App() {
             isolateSets={isolateSetsFor(chosen, datasets)}
             showTyping={showTyping}
             showGradient={showGradient}
+            summary={summary}
+            exporting={exporting}
+            onExportClose={() => setExporting(false)}
           />
         </>
       ) : (

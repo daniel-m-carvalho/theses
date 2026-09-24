@@ -89,11 +89,16 @@ export interface DatasetsResponse {
 }
 
 export interface ComparisonSummary {
-  pair_id: string;
+  pair: string;
+  metric: string;
   left: string;
   right: string;
-  metric: string;
-  summary: Record<string, number>;
+  /** Metric-specific scalars; free-form because metrics differ. */
+  summary: Record<string, number | string>;
+  shared_leaves: number;
+  /** Leaf labels present only in one tree, so excluded from the metric. */
+  dropped_from_left: string[];
+  dropped_from_right: string[];
   same_species: boolean | null;
   caution: string | null;
 }

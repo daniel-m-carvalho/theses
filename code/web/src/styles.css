@@ -420,3 +420,43 @@ body {
   flex: 0 0 auto;
   border: 1px solid rgb(0 0 0 / 12%);
 }
+
+/* --- export --- */
+.export-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  background: rgb(16 18 25 / 32%);
+  padding: 20px;
+}
+.export-panel {
+  width: min(520px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  padding: 20px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.export-panel h2 { margin: 0 0 4px; font-size: 16px; }
+.export-lead { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
+.export-field { display: grid; gap: 4px; font-size: 12px; color: var(--muted); margin-bottom: 14px; }
+.export-field input {
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+}
+.export-contents {
+  margin: 14px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.export-contents li { margin-bottom: 2px; }
+.export-error { color: var(--danger); font-size: 13px; margin: 12px 0 0; }
+.export-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }

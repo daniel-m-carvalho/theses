@@ -15,11 +15,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   createComparison,
+  snapshotViewer,
   type BarScale,
   type ComparisonHandle,
   type Config,
 } from "phylo-tree-viewer";
-import type { PairSummary } from "../api/types";
+import type { ComparisonSummary, PairSummary } from "../api/types";
+import { buildReport, downloadReport } from "../export/buildReport";
+import { ExportPanel, type ExportChoices } from "../export/ExportPanel";
 import { ContextMenu } from "../menu/ContextMenu";
 import { TypingLegend } from "../typing/TypingLegend";
 import { datumFor, useTypingData } from "../typing/useTypingData";
@@ -157,6 +160,9 @@ export function ComparisonView({
   isolateSets = [null, null],
   showTyping = false,
   showGradient = true,
+  summary = null,
+  exporting = false,
+  onExportClose,
 }: {
   pair: PairSummary;
   initial?: { left: number[]; right: number[] };
@@ -165,6 +171,11 @@ export function ComparisonView({
   isolateSets?: [string | null, string | null];
   showTyping?: boolean;
   showGradient?: boolean;
+  /** The computed scalars, for the report. */
+  summary?: ComparisonSummary | null;
+  /** Opened from the header; the panel lives here because the viewers do. */
+  exporting?: boolean;
+  onExportClose?: () => void;
 }) {
   // Both panels are the same height, so one measurement serves both — and
   // both must ask for the same detail or the two sides stop being comparable
@@ -421,6 +432,51 @@ export function ComparisonView({
     return () => observer.disconnect();
   }, []);
 
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  const runExport = useCallback(
+    async (choices: ExportChoices) => {
+      setExportBusy(true);
+      setExportError(null);
+      try {
+        const panels = handle.current?.panels ?? [];
+        // Snapshots are taken now, from the live viewers, so the report shows
+        // what the screen shows rather than a default view of the same pair.
+        const images = choices.images
+          ? {
+              left: panels[0] ? await snapshotViewer(panels[0].viewer) : undefined,
+              right: panels[1] ? await snapshotViewer(panels[1].viewer) : undefined,
+            }
+          : {};
+
+        const showing = (state: SideState) =>
+          state.slice
+            ? `showing ${state.slice.displayed_leaves.toLocaleString()} of ${state.slice.total_leaves.toLocaleString()} leaves`
+            : "no slice loaded";
+
+        downloadReport(
+          buildReport({
+            pair,
+            summary,
+            title: choices.title,
+            images,
+            showing: { left: showing(left), right: showing(right) },
+            typing: showTyping ? { columns: segmentKeys, scale: barScale } : null,
+            gradient: showGradient,
+          }),
+          `${choices.title.replace(/[^\w.-]+/g, "-").toLowerCase()}.html`,
+        );
+        onExportClose?.();
+      } catch (failed) {
+        setExportError(failed instanceof Error ? failed.message : String(failed));
+      } finally {
+        setExportBusy(false);
+      }
+    },
+    [pair, summary, left, right, showTyping, segmentKeys, barScale, showGradient, onExportClose],
+  );
+
   const dismiss = useCallback(() => setMenu(null), []);
 
   // A menu opened on empty canvas still acts on the selected node, if there is
@@ -460,6 +516,17 @@ export function ComparisonView({
           onScale={setBarScale}
           loading={leftTyping.loading || rightTyping.loading}
           error={leftTyping.error ?? rightTyping.error}
+        />
+      ) : null}
+
+      {exporting ? (
+        <ExportPanel
+          defaultTitle={`${pair.left} vs ${pair.right}`}
+          pairLabel="report"
+          busy={exportBusy}
+          error={exportError}
+          onCancel={() => onExportClose?.()}
+          onExport={(choices) => void runExport(choices)}
         />
       ) : null}
 
