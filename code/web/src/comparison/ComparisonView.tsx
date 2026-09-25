@@ -245,6 +245,7 @@ export function ComparisonView({
   initial,
   onNavigate,
   isolateSets = [null, null],
+  names,
   options,
   onOptions,
   summary = null,
@@ -256,6 +257,8 @@ export function ComparisonView({
   onNavigate?: (left: number[], right: number[]) => void;
   /** Isolate-set id per side; null where that tree has no typing data. */
   isolateSets?: [string | null, string | null];
+  /** What to call the comparison and each tree; the ids otherwise. */
+  names?: { pair: string; left: string; right: string };
   /** Everything the View menu and the typing footer decide; see ViewOptions. */
   options: ViewOptions;
   /** Report a footer change so it reaches the URL with the rest of the view. */
@@ -645,6 +648,7 @@ export function ComparisonView({
         await exportReport(
           {
             pair,
+            names: names ? { left: names.left, right: names.right } : undefined,
             summary,
             title: choices.title,
             images,
@@ -678,6 +682,7 @@ export function ComparisonView({
     },
     [
       pair,
+      names,
       summary,
       left,
       right,
@@ -718,8 +723,8 @@ export function ComparisonView({
   return (
     <div className="comparison">
       <header className="comparison-bar">
-        <Side label="Left" state={left} selected={selected[0]} />
-        <Side label="Right" state={right} selected={selected[1]} />
+        <Side label="Left" name={names?.left} state={left} selected={selected[0]} />
+        <Side label="Right" name={names?.right} state={right} selected={selected[1]} />
       </header>
 
       <div className="panels">
@@ -742,7 +747,7 @@ export function ComparisonView({
 
       {exporting ? (
         <ExportPanel
-          defaultTitle={`${pair.left} vs ${pair.right}`}
+          defaultTitle={names?.pair ?? `${pair.left} vs ${pair.right}`}
           pairLabel="report"
           busy={exportBusy}
           error={exportError}
@@ -794,10 +799,12 @@ function Panel({
 
 function Side({
   label,
+  name,
   state,
   selected,
 }: {
   label: string;
+  name?: string;
   state: SideState;
   selected: number | null;
 }) {
@@ -805,7 +812,7 @@ function Side({
   return (
     <div className="side-summary">
       <p className="side-name">
-        {label}: <strong>{state.treeId}</strong>
+        {label}: <strong title={state.treeId}>{name || state.treeId}</strong>
         {selected !== null ? (
           <span className="selected-node"> · node {selected} selected</span>
         ) : null}

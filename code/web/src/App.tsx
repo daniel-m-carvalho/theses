@@ -20,6 +20,7 @@ import type {
   WhoAmI,
 } from "./api/types";
 import { headline, viewMetric } from "./comparison/metric";
+import { pairName, treeName } from "./names";
 
 export function App() {
   const [me, setMe] = useState<WhoAmI | null>(null);
@@ -260,6 +261,11 @@ export function App() {
             }
             onNavigate={(l, r) => setView({ comparison: chosen.id, left: l, right: r })}
             isolateSets={isolateSetsFor(chosen, datasets)}
+            names={{
+              pair: pairName(chosen, datasets),
+              left: treeName(chosen.left, datasets),
+              right: treeName(chosen.right, datasets),
+            }}
             options={options}
             onOptions={setOptions}
             summary={summary}
@@ -292,9 +298,7 @@ export function App() {
                         setView({ comparison: pair.id, left: [], right: [] });
                       }}
                     >
-                      <span className="pair-name">
-                        {pair.left} vs {pair.right}
-                      </span>
+                      <span className="pair-name">{pairName(pair, datasets)}</span>
                       <span className={`pair-status ${pair.status}`}>{pair.status}</span>
                       {pair.status === "ready" ? (
                         <span className="pair-detail">

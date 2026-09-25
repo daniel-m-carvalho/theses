@@ -20,6 +20,8 @@ import type { ComparisonSummary, PairSummary } from "../api/types";
 
 export interface ReportInput {
   pair: PairSummary;
+  /** What to call each tree in the captions; the ids otherwise. */
+  names?: { left: string; right: string };
   summary: ComparisonSummary | null;
   title: string;
   images: { left?: string; right?: string };
@@ -42,8 +44,8 @@ export function toReportInput(input: ReportInput): ComparisonReportInput {
   return {
     title: input.title,
     panels: [
-      { label: pair.left, image: input.images.left, showing: input.showing.left },
-      { label: pair.right, image: input.images.right, showing: input.showing.right },
+      { label: input.names?.left ?? pair.left, image: input.images.left, showing: input.showing.left },
+      { label: input.names?.right ?? pair.right, image: input.images.right, showing: input.showing.right },
     ],
     metric: summary ? { name: summary.metric, scalars: summary.summary } : null,
     reconciliation: summary

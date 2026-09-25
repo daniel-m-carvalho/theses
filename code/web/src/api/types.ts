@@ -55,6 +55,8 @@ export interface TreeSlice {
 
 export interface TreeSummary {
   id: string;
+  /** What to call it; the id is a handle for URLs. Empty when none was given. */
+  display_name: string;
   species: string;
   method: string;
   n_nodes: number;
@@ -64,6 +66,8 @@ export interface TreeSummary {
 
 export interface PairSummary {
   id: string;
+  /** The name given at upload, or "<left> vs <right>" by default. */
+  display_name: string;
   left: string;
   right: string;
   species: string;
