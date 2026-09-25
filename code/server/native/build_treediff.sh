@@ -9,6 +9,11 @@
 # Neither project builds unmodified on macOS 27 / arm64 with CMake 4.x and
 # Apple clang 21. Four fixes are needed, each documented at its site below.
 # None is optional and none is discoverable from the projects' own READMEs.
+#
+# It also runs in the Docker builder (Debian, g++), which is how the triplet and
+# rf-treediff metrics reach the deployment: without it they are registered and
+# report `available: false`, and the upload form has nothing to offer but rf.
+# The macOS-only fixes are applied only on macOS.
 
 set -euo pipefail
 
@@ -37,8 +42,14 @@ export CMAKE_POLICY_VERSION_MINIMUM=3.5
 # falls through to the MSVC branch, which defines -DMSVC_COMPILER and makes
 # util.hpp include <process.h> — a Windows header. Naming a compiler path that
 # literally contains "clang" satisfies the first test.
-export CXX=/usr/bin/clang++
-export CC=/usr/bin/clang
+if [ "$(uname -s)" = "Darwin" ]; then
+  export CXX=/usr/bin/clang++
+  export CC=/usr/bin/clang
+else
+  # GCC is detected correctly, so there is nothing to work around.
+  export CXX="${CXX:-g++}"
+  export CC="${CC:-gcc}"
+fi
 
 # --- Fix 3: an upstream typo in louds_tree.hpp ------------------------------
 # louds_tree::swap references tree.m_select1 / tree.m_select0, which do not
@@ -57,8 +68,11 @@ sed -i.bak \
 # --- Fix 4: TreeDiff's Makefile assumes GCC and static linking --------------
 # `-static` cannot work on macOS (no static libc is shipped). TreeDiff's own
 # README gives the clang recipe; the Makefile just does not default to it.
+# Dropped on Linux too: the runtime image has libstdc++, and a static glibc
+# binary warns about every lookup it cannot make static. The compiler is
+# whichever was chosen above.
 sed -i.bak \
-  -e 's|^  CC = g++|  CC = clang++|' \
+  -e "s|^  CC = g++|  CC = $CXX|" \
   -e 's|^  CFLAGS  = -O3 -Wall -static|  CFLAGS  = -O3 -Wall -std=c++11|' \
   Makefile
 
@@ -75,8 +89,8 @@ sed 's/float/double/g; s/stof/stod/g' rf_postorder.cpp > rf_postorder_double.cpp
 sed 's/float/double/g; s/stof/stod/g' rf_nextsibling.cpp > rf_nextsibling_double.cpp
 
 make
-clang++ -O3 -Wall -std=c++11 -I./sdsl/include/ rf_postorder_double.cpp   sdsl/lib/libsdsl.a -o rf_postorder_double
-clang++ -O3 -Wall -std=c++11 -I./sdsl/include/ rf_nextsibling_double.cpp sdsl/lib/libsdsl.a -o rf_nextsibling_double
+"$CXX" -O3 -Wall -std=c++11 -I./sdsl/include/ rf_postorder_double.cpp   sdsl/lib/libsdsl.a -o rf_postorder_double
+"$CXX" -O3 -Wall -std=c++11 -I./sdsl/include/ rf_nextsibling_double.cpp sdsl/lib/libsdsl.a -o rf_nextsibling_double
 
 echo
 echo "Built in $DEST:"

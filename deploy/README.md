@@ -97,9 +97,21 @@ If the compile fails the build still succeeds on the Python path — look for
 
 ## Subprocess metrics
 
-`triplet` and `rf-treediff` shell out to TreeDiff, which is **not** in the image
-— it is GPL-3.0 and this project is MIT, so it is used as a separate program
-and not vendored. Without it those metrics report `available: false` at
-`/api/v1/metrics` and `rf` still works. To include them, run
-`native/build_treediff.sh` in a derived image and accept the licensing
-consequences for that image.
+`triplet` and `rf-treediff` shell out to TreeDiff, which **is** built into the
+image (`native/build_treediff.sh`, about a minute in the builder). Only the two
+programs the metrics run, `rf_postorder` and `trip_sht`, reach the runtime
+image, under `/app/native/TreeDiff/`.
+
+TreeDiff is GPL-3.0 and this project is MIT, so it stays a separate program the
+metrics run as a subprocess, never linked into this code and not vendored in
+the repository. That is fine for running the image on the university VM. **If
+you distribute the image itself**, you must also offer TreeDiff's source
+(<https://github.com/pedroparedesbranco/TreeDiff>) with it.
+
+The build is optional: if it fails, the image still builds, those two metrics
+report `available: false` at `/api/v1/metrics`, the upload form lists them as
+"not installed on this server", and `rf` still works. Check with:
+
+```sh
+curl -s localhost:8001/api/v1/metrics   # each metric's "available"
+```

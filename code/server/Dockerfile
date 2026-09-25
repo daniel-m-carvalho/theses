@@ -14,7 +14,7 @@
 FROM python:3.12-slim AS build
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends g++ git ca-certificates \
+ && apt-get install -y --no-install-recommends g++ git ca-certificates cmake make \
  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
@@ -34,6 +34,21 @@ RUN uv sync --frozen
 # failed build over an optimisation.
 RUN ./native/build.sh || echo "native extension unavailable; using the Python path"
 
+# TreeDiff, for the triplet and rf-treediff metrics. GPL-3.0, and so a separate
+# program the metrics run as a subprocess, never linked into this MIT code. It
+# is built here for the university deployment, where the image is run and not
+# distributed; anyone handing the image itself to others must offer TreeDiff's
+# source with it (deploy/README.md). Optional like the extension above: without
+# it those two metrics report `available: false` and rf still works.
+RUN ./native/build_treediff.sh /app/native/TreeDiff \
+ || echo "TreeDiff unavailable; triplet and rf-treediff will report available: false"
+# Only the programs the metrics run, not the sources or sdsl: a directory that
+# exists whatever happened, so the COPY below never fails the build.
+RUN mkdir -p /app/treediff-bin \
+ && for b in rf_postorder trip_sht; do \
+      [ -x "/app/native/TreeDiff/$b" ] && cp "/app/native/TreeDiff/$b" /app/treediff-bin/ || true; \
+    done
+
 # --- runtime ---------------------------------------------------------------
 FROM python:3.12-slim
 
@@ -51,6 +66,7 @@ COPY --from=build /app/pyproject.toml /app/README.md ./
 # Only the built extension and the build scripts, not the vendored sources.
 COPY --from=build /app/native/*.so /app/native/
 COPY --from=build /app/native/build.sh /app/native/
+COPY --from=build /app/treediff-bin/ /app/native/TreeDiff/
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
