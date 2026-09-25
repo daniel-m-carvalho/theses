@@ -14,8 +14,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError } from "../api/client";
 import type { ComparisonStatus, MetricSummary } from "../api/types";
-
-type Slot = "left_tree" | "right_tree" | "left_isolates" | "right_isolates";
+import { clearDraft, loadFields, loadFiles, saveFields, saveFile, type Slot } from "./draft";
 
 const TREE_HINT = "Newick — .nwk, .newick, .tree";
 const TABLE_HINT = "Tab-separated typing data — .tsv";
@@ -34,11 +33,26 @@ function firstSentence(text: string): string {
 }
 
 export function UploadPanel({ onReady }: { onReady: (comparisonId: string) => void }) {
+  // Read once, synchronously, so the form renders filled after a refresh
+  // rather than empty and then filling (draft.ts).
+  const [draft] = useState(loadFields);
   const [files, setFiles] = useState<Partial<Record<Slot, File>>>({});
-  const [sharedTyping, setSharedTyping] = useState(true);
-  const [name, setName] = useState("");
-  const [leftSpecies, setLeftSpecies] = useState("");
-  const [rightSpecies, setRightSpecies] = useState("");
+  const [sharedTyping, setSharedTyping] = useState(draft.sharedTyping);
+  const [name, setName] = useState(draft.name);
+  const [leftSpecies, setLeftSpecies] = useState(draft.leftSpecies);
+  const [rightSpecies, setRightSpecies] = useState(draft.rightSpecies);
+
+  // Files are asynchronous to read back. A slot the user has filled in the
+  // meantime keeps what they chose; the stored one only fills empty slots.
+  useEffect(() => {
+    let live = true;
+    loadFiles().then((stored) => {
+      if (live) setFiles((current) => ({ ...stored, ...current }));
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
 
   /*
    * What this server can compute with, asked rather than assumed.
@@ -60,7 +74,12 @@ export function UploadPanel({ onReady }: { onReady: (comparisonId: string) => vo
       .then((found) => {
         const usable = found.filter((metric) => metric.available);
         setMetrics(usable);
-        setChosen((current) => current || (usable[0]?.name ?? ""));
+        // The remembered choice only if this server still offers it: a
+        // metric whose runtime has gone would be sent and refused by name.
+        const remembered = usable.some((metric) => metric.name === draft.metric)
+          ? draft.metric
+          : "";
+        setChosen((current) => current || remembered || (usable[0]?.name ?? ""));
       })
       .catch(() => setMetrics([]));
   }, []);
@@ -68,8 +87,13 @@ export function UploadPanel({ onReady }: { onReady: (comparisonId: string) => vo
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    saveFields({ name, leftSpecies, rightSpecies, sharedTyping, metric: chosen });
+  }, [name, leftSpecies, rightSpecies, sharedTyping, chosen]);
+
   const put = useCallback((slot: Slot, file: File | undefined) => {
     setFiles((current) => ({ ...current, [slot]: file }));
+    void saveFile(slot, file);
   }, []);
 
   const ready = Boolean(files.left_tree && files.right_tree);
@@ -97,6 +121,8 @@ export function UploadPanel({ onReady }: { onReady: (comparisonId: string) => vo
       // The server computes off the request path, so the only honest thing to
       // do here is poll — a comparison of two 500k-node trees is minutes.
       await poll(accepted.id, setStatus);
+      // Done: the comparison is in the list now, so the draft has served.
+      await clearDraft();
       onReady(accepted.id);
     } catch (failed) {
       setError(
