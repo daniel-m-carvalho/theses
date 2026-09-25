@@ -1,0 +1,92 @@
+[
+  {
+    "leaves": 1000,
+    "id": "87a594497778__3a05b50b7ed9",
+    "upload_s": 0.04345395800191909,
+    "build_s": 2.03737808400183,
+    "total_s": 2.080832042003749,
+    "status": "ready",
+    "error": null,
+    "bytes": 16704
+  },
+  {
+    "leaves": 2500,
+    "id": "707df38ec090__cfbf711adb82",
+    "upload_s": 0.007156041014241055,
+    "build_s": 2.032426999998279,
+    "total_s": 2.03958304101252,
+    "status": "ready",
+    "error": null,
+    "bytes": 41832
+  },
+  {
+    "leaves": 5000,
+    "id": "8af1aa65c99e__91df14b26367",
+    "upload_s": 0.006615749996853992,
+    "build_s": 2.0291199999919627,
+    "total_s": 2.0357357499888167,
+    "status": "ready",
+    "error": null,
+    "bytes": 83748
+  },
+  {
+    "leaves": 10000,
+    "id": "f4d91f4f31aa__9172bc06c98a",
+    "upload_s": 0.007366125006228685,
+    "build_s": 2.541886249993695,
+    "total_s": 2.5492523749999236,
+    "status": "ready",
+    "error": null,
+    "bytes": 167408
+  },
+  {
+    "leaves": 17645,
+    "id": "6a2ea4cbdc44__4dd6a843614d",
+    "upload_s": 0.010180333978496492,
+    "build_s": 2.5600842499989085,
+    "total_s": 2.570264583977405,
+    "status": "ready",
+    "error": null,
+    "bytes": 1110525
+  },
+  {
+    "leaves": 35290,
+    "id": "2d65bca11fa7__4c28aabc624f",
+    "upload_s": 0.016481875005410984,
+    "build_s": 3.04438116698293,
+    "total_s": 3.060863041988341,
+    "status": "ready",
+    "error": null,
+    "bytes": 2072023
+  },
+  {
+    "leaves": 70580,
+    "id": "65463a257b9f__91440ed82f34",
+    "upload_s": 0.01589195799897425,
+    "build_s": 5.618002917006379,
+    "total_s": 5.633894875005353,
+    "status": "ready",
+    "error": null,
+    "bytes": 4249923
+  },
+  {
+    "leaves": 141160,
+    "id": "127c5f679eb3__0c27af99acdf",
+    "upload_s": 0.031337249994976446,
+    "build_s": 14.363465125003131,
+    "total_s": 14.394802374998108,
+    "status": "ready",
+    "error": null,
+    "bytes": 8605723
+  },
+  {
+    "leaves": 282320,
+    "id": "be0c11f9e6d9__d2112faa5534",
+    "upload_s": 0.054359834000933915,
+    "build_s": 49.82024945798912,
+    "total_s": 49.874609291990055,
+    "status": "ready",
+    "error": null,
+    "bytes": 17493778
+  }
+]

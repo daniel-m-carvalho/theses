@@ -30,17 +30,33 @@ export async function attach(page) {
  * Retained JS heap in bytes, after a forced collection.
  * Falls back to the un-collected reading if GC is unavailable.
  */
-export async function heapBytes(client) {
+export async function heapBytes(client, { timeoutMs = 20_000 } = {}) {
+  // BOUNDED. A forced collection on a multi-gigabyte heap can take minutes and
+  // CDP gives it no deadline of its own: a first version of the ladder sat for
+  // 44 minutes inside this call, on a page holding 7.5 GB, and produced no
+  // rows at all. A missing memory reading is a gap in one cell; a harness that
+  // hangs in its own instrumentation loses the whole run.
+  const withDeadline = (promise) =>
+    Promise.race([
+      promise,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("cdp timeout")), timeoutMs),
+      ),
+    ]);
+
   try {
-    await client.send("HeapProfiler.collectGarbage");
+    await withDeadline(client.send("HeapProfiler.collectGarbage"));
   } catch {
-    /* not fatal — the reading is just noisier */
+    /* not fatal — the reading is just noisier, and that is recorded */
   }
-  const { usedSize } = await client.send("Runtime.getHeapUsage");
-  return usedSize;
+  try {
+    const { usedSize } = await withDeadline(client.send("Runtime.getHeapUsage"));
+    return usedSize;
+  } catch {
+    return null;
+  }
 }
 
-/** Live DOM node count, listeners and document count. */
 export async function domCounters(client) {
   const { documents, nodes, jsEventListeners } = await client.send("Memory.getDOMCounters");
   return { documents, nodes, jsEventListeners };

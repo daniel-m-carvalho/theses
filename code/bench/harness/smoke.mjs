@@ -2,12 +2,12 @@
  * Day-1 de-risking spike: can phylo.io be driven headlessly at all?
  * Everything downstream depends on this, so it runs first and alone.
  */
-import { chromium } from "playwright";
+import { launch } from "./browser.mjs";
 import { start } from "./serve.mjs";
 
 const PORT = 8099;
 const server = await start(PORT);
-const browser = await chromium.launch();
+const browser = await launch();
 const page = await browser.newPage();
 
 const errors = [];

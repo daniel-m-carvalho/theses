@@ -1,3 +1,7 @@
 .DS_Store
 node_modules/
 dist/
+# Benchmark ladder trees: 32 MB of generated Newick, reproducible in minutes
+# from the real pair with `tools/make_ladder.py`. The generator is the record;
+# the trees are not.
+code/bench/trees/ladder/

@@ -3342,6 +3342,90 @@ mark to the other panel; × clears it.
 
 ---
 
+## 32. Measured against Phylo.io
+
+The measurement the whole project exists to support, taken 2026-09-25 and deferred until now
+because a like-for-like comparison only becomes meaningful once there is a frontend that uses the
+slicing API (see *Corrections*, on the earlier premature comparison).
+
+### 32.1 Method
+
+A **ladder of nine pairs**, 1,000 to 282,320 leaves, built from the real vibrio pair: pruned
+subsamples below it, nested relabelled copies above. Nesting rather than joining N copies under one
+root, because a flat join halves the effective depth and the search's pruning bound depends on shape
+(§15.1). Every rung verified as a genuine pair — 100% shared leaf sets, depth 79 to 191.
+
+Both tools, same pair, same origin, uncompressed, same real Chrome 154, viewport 1440x900, one fresh
+page each. What is timed is a cold start to an interactive comparison. Memory through CDP after a
+forced GC; never `performance.memory` (see *Corrections*).
+
+**PhyloDelta is the median of six samples per rung after a discarded warm-up. phylo.io is a single
+sample**, because at the top rungs one sample costs minutes. That asymmetry is stated rather than
+hidden: the effect sizes are large and monotone across seven points, which is what makes n=1
+tolerable for the shape, and it is still a limitation.
+
+### 32.2 Result
+
+| leaves | phylo.io | PhyloDelta | server precompute |
+|---|---|---|---|
+| 1,000 | 0.8 s · 4.1 MB | 0.62 s · 3.6 MB | 2.0 s |
+| 2,500 | 1.8 s · 7.9 MB | 0.52 s · 3.6 MB | 2.0 s |
+| 5,000 | 3.7 s · 14.4 MB | 0.61 s · 3.6 MB | 2.0 s |
+| 10,000 | 8.6 s · 29.2 MB | 0.58 s · 3.6 MB | 2.5 s |
+| 17,645 | 17.9 s · 58.7 MB | 0.61 s · 3.6 MB | 2.6 s |
+| 35,290 | 48.7 s · 115.6 MB | 0.58 s · 3.6 MB | 3.0 s |
+| 70,580 | **153.2 s · 230.2 MB** | **0.59 s · 3.6 MB** | 5.6 s |
+| 141,160 | did not complete in 240 s | 0.66 s · 3.6 MB | 14.4 s |
+| 282,320 | did not complete in 240 s | 0.53 s · 3.6 MB | 49.8 s |
+
+At 70,580 leaves — the largest rung both complete — **260x faster on 64x less memory**.
+
+### 32.3 The mechanism, which is not the one we expected
+
+**Phylo.io does not render the whole tree either.** Its drawn output is roughly constant across the
+ladder: ~460 to ~670 SVG paths, ~5,800 to ~6,900 DOM nodes. The intuitive story — "they draw
+everything, we draw a slice" — is false, and an examiner reaching for it is answered by their own
+counts.
+
+What differs is upstream. Phylo.io **parses and models the entire tree in the browser** to draw its
+subset, so its heap is exactly linear in leaves (115.6 -> 230.2 MB for a doubling) while its DOM is
+flat. PhyloDelta never receives the tree: 3.6 MB and ~0.6 s at every size, because what crosses the
+wire is sized by the viewport rather than by the data.
+
+That is a stronger claim than the one this was set up to test, and a more defensible one: it does
+not depend on drawing less, only on holding less.
+
+**What it costs.** Up to 49.8 s of offline precompute at 282,320 leaves, and a server at all.
+Phylo.io needs neither, and that belongs in the same table rather than in a footnote.
+
+### 32.4 Two harness bugs, one of which nearly became a finding
+
+* **A degradation that was not there.** The first ladder — n=1 per cell — reported PhyloDelta at
+  2.7 s and 3.6 s on the top two rungs, a 9x jump that looked like a real limit and had a plausible
+  story (a bigger tree to summarise). A direct probe could not reproduce it: the same request burst
+  took ~30 ms, and the API slice is **6-10 ms at every rung including 282,320**. With six samples
+  the medians are flat. Single samples at sub-second scale were measuring the laptop.
+* **`page.waitForFunction(fn, {timeout})` puts options in the THIRD argument.** Passed second, they
+  are the page function's argument, so the 30 s default was in force for the whole run. It changed
+  no outcome, but only because nothing needed between 30 s and the intended budget.
+
+Both are the §27.2 lesson again in a new place: the first version of a measurement tends to confirm
+whatever it was built expecting.
+
+### 32.5 Limitations
+
+* Phylo.io at n=1 per rung.
+* "Did not complete in 240 s" is a budget, **not** a crash. An unbounded attempt was not run, so no
+  claim is made that it cannot finish. A renderer observed at 7.5 GB during an earlier uncapped run
+  suggests it may, expensively.
+* Rungs above 17,645 leaves are **synthetic**. Real data in `datasets/` stops at 27,962.
+
+Tooling: `code/bench/harness/{ceiling,repeat_phylodelta,probe_latency}.mjs`,
+`code/server/tools/{make_ladder,build_ladder_stores}.py`. Results in `code/bench/results/`.
+
+
+---
+
 ## References and provenance
 
 Where every algorithm and every implementation came from. Bibliographic details are taken from the

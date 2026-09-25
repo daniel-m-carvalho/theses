@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>phylo.io — BCN accuracy extraction</title>
+    <style>
+      html, body { margin: 0; height: 100%; }
+      #panels { display: flex; height: 100vh; }
+      #left, #right { flex: 1 1 0; overflow: hidden; }
+    </style>
+    <script src="/phyloio/dist/src_worker_bcn_js.phylo.js"></script>
+    <script src="/phyloio/dist/src_worker_distance_js.phylo.js"></script>
+    <script src="/phyloio/dist/phylo.js"></script>
+  </head>
+  <body>
+    <div id="panels"><div id="left"></div><div id="right"></div></div>
+    <script>
+      /*
+       * Extract phylo.io's per-clade similarity so it can be compared against
+       * an exact search over the same clades.
+       *
+       * Their score lives on the model node as `elementS[other_container_uid]`
+       * and is the best Jaccard among **ten** candidates retrieved by
+       * MinHash/LSH (`worker_bcn.js`: `target_forest.query(node.min_hash, 10)`).
+       * An exact search maximises over every node, so ours is an upper bound
+       * on theirs and any gap is what the approximation cost.
+       *
+       * Clades are joined between the two implementations by their LEAF SET,
+       * not by node id — the two tools number nodes differently and neither
+       * numbering is part of either's contract. `deepLeafList` carries both
+       * leaf names and `|__|`-joined clade signatures, so it is filtered the
+       * same way phylo.io filters it internally, or the two would be scoring
+       * different things.
+       */
+      function isLeafName(str) { return !str.includes("|__|"); }
+
+      // 2x32-bit FNV-1a over the sorted leaf set. Paired with the set size it
+      // identifies a clade compactly enough to ship 17k of them as JSON;
+      // sending the leaf lists themselves would be tens of megabytes.
+      function fingerprint(sortedNames) {
+        let a = 0x811c9dc5, b = 0x01000193;
+        for (const name of sortedNames) {
+          for (let i = 0; i < name.length; i++) {
+            a ^= name.charCodeAt(i); a = Math.imul(a, 0x01000193) >>> 0;
+            b = (b + name.charCodeAt(i)) >>> 0; b = Math.imul(b, 0x85ebca6b) >>> 0;
+          }
+          a ^= 0x2c; a = Math.imul(a, 0x01000193) >>> 0;
+          b = (b ^ 0x2c) >>> 0;
+        }
+        return `${a.toString(36)}.${b.toString(36)}`;
+      }
+
+      window.__bench = {
+        async extract(leftUrl, rightUrl) {
+          const [a, b] = await Promise.all([
+            fetch(leftUrl).then((r) => r.text()),
+            fetch(rightUrl).then((r) => r.text()),
+          ]);
+
+          const phylo = PhyloIO.init();
+          const c1 = phylo.create_container("left");
+          const c2 = phylo.create_container("right");
+          phylo.settings.compareMode = true;
+          phylo.bound_container = [c1, c2];
+          c1.add_tree(a);
+          c2.add_tree(b);
+
+          const started = performance.now();
+          phylo.start();
+          const elapsed = performance.now() - started;
+
+          const out = [];
+          let scored = 0, unscored = 0;
+          const walk = (node) => {
+            const names = (node.deepLeafList || []).filter(isLeafName).sort();
+            const children = node.children || node.branchset || [];
+            if (children.length > 0 && names.length > 0) {
+              const scores = node.elementS ? Object.values(node.elementS) : [];
+              // No entry at all means LSH returned nothing usable for this
+              // clade — a total miss, distinct from a low score.
+              if (scores.length) { scored++; } else { unscored++; }
+              out.push({
+                n: names.length,
+                k: fingerprint(names),
+                s: scores.length ? scores[0] : null,
+              });
+            }
+            children.forEach(walk);
+          };
+          walk(c1.models[0].data);
+
+          return { clades: out, scored, unscored, compare_ms: elapsed };
+        },
+      };
+      window.__benchReady = true;
+    </script>
+  </body>
+</html>
