@@ -350,6 +350,88 @@ describe("how long a located node stays marked", () => {
       vi.useRealTimers();
     }
   });
+
+  it("stays lit after flashing when the mark is meant to persist, until cleared", () => {
+    vi.useFakeTimers();
+    try {
+      const h = makeHarness(namedTree());
+      const cmp = new ComparisonOperator({
+        enabled: true,
+        keyOf: keyByName,
+        flashes: 5,
+        flashInterval: 100,
+        persistHighlight: true,
+      });
+      cmp.attach(h.viewer);
+      h.render();
+      const lit = () => h.styleOf("named_a").color === "#ff0000";
+
+      cmp.highlightByKey("a", { center: false });
+      vi.advanceTimersByTime(5000);
+      // The case the persistent mark exists for: long after the flashing.
+      expect(lit()).toBe(true);
+      expect(cmp.getHighlightedKey()).toBe("a");
+
+      cmp.clearHighlight();
+      expect(lit()).toBe(false);
+      expect(cmp.getHighlightedKey()).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("moves the mark rather than adding a second one", () => {
+    vi.useFakeTimers();
+    try {
+      const h = makeHarness(namedTree());
+      const cmp = new ComparisonOperator({ enabled: true, keyOf: keyByName, persistHighlight: true });
+      cmp.attach(h.viewer);
+      h.render();
+
+      cmp.highlightByKey("a", { center: false });
+      cmp.highlightByKey("b", { center: false });
+      vi.advanceTimersByTime(5000);
+      expect(h.styleOf("named_b").color).toBe("#ff0000");
+      expect(h.styleOf("named_a").color).not.toBe("#ff0000");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps the mark on the same node across a re-layout", () => {
+    // Held by graph id, a re-render re-minted the ids under it.
+    vi.useFakeTimers();
+    try {
+      const h = makeHarness(namedTree());
+      const cmp = new ComparisonOperator({ enabled: true, keyOf: keyByName, persistHighlight: true });
+      cmp.attach(h.viewer);
+      h.render();
+      cmp.highlightByKey("a", { center: false });
+      vi.advanceTimersByTime(5000);
+
+      h.render();
+      expect(h.styleOf("named_a").color).toBe("#ff0000");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps a persistent mark when the colouring is switched off", () => {
+    vi.useFakeTimers();
+    try {
+      const h = makeHarness(namedTree());
+      const cmp = new ComparisonOperator({ enabled: true, keyOf: keyByName, persistHighlight: true });
+      cmp.attach(h.viewer);
+      h.render();
+      cmp.highlightByKey("a", { center: false });
+      vi.advanceTimersByTime(5000);
+
+      cmp.setEnabled(false);
+      expect(h.styleOf("named_a").color).toBe("#ff0000");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe("branches the backend gave no value for", () => {

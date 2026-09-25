@@ -122,6 +122,17 @@ export interface ComparisonOptions {
   /** Milliseconds each on- or off-phase lasts (default 300). */
   flashInterval?: number;
   /**
+   * Keep the node marked, steadily, once it has flashed (default false), until
+   * {@link ComparisonOperator.clearHighlight} or the next `highlightByKey`.
+   *
+   * The temporary default was right for a mark the view leaves behind unasked.
+   * It was wrong for one the user asked for: in use, the leaf was lost the
+   * moment the flashing stopped, while the eye was still going back and forth
+   * between the panels. A consumer turning this on should give the user a
+   * visible way to clear it — the mark is theirs, not the view's.
+   */
+  persistHighlight?: boolean;
+  /**
    * Membership hover wording, `[different, equal]`. Default
    * `["different", "equal"]`. Both are still used by the tooltip — hovering says
    * which state a leaf is in — even though only "equal" is *painted*; the legend
@@ -194,7 +205,14 @@ export class ComparisonOperator implements TreeOperator {
   private enabled: boolean;
 
   private peer: ComparisonOperator | null = null;
-  private highlightedId: string | null = null;
+  /**
+   * The located node, by **key**, not by graph id. Ids are minted by layout
+   * and re-minted on every re-layout (a resize, a layout switch, a re-slice),
+   * so a mark held by id silently moved to another node or vanished; a key
+   * names the same node through all of them.
+   */
+  private highlightedKey: string | null = null;
+  private persistHighlight: boolean;
   private blinkOn = true;
   private blinkTimer: ReturnType<typeof setInterval> | null = null;
   private flashes: number;
@@ -226,6 +244,7 @@ export class ComparisonOperator implements TreeOperator {
     this.markerSize = options.markerSize ?? 6;
     this.flashes = Math.max(1, Math.round(options.flashes ?? 3));
     this.flashInterval = Math.max(50, options.flashInterval ?? 300);
+    this.persistHighlight = options.persistHighlight ?? false;
     this.membershipLabels = options.membershipLabels ?? ["Different", "Equal"];
     this.showLegend = options.legend ?? true;
     this.legendLabels = options.legendLabels ?? ["Different", "Similar"];
@@ -326,7 +345,10 @@ export class ComparisonOperator implements TreeOperator {
 
   setEnabled(enabled: boolean): void {
     this.enabled = enabled;
-    if (!enabled) this.clearHighlight();
+    // A temporary flash is part of the comparison's presentation and goes
+    // with it. A persistent mark is the user's, and turning the colouring off
+    // must not take it away.
+    if (!enabled && !this.persistHighlight) this.clearHighlight();
     this.legendEl.style.display = enabled && this.showLegend ? "block" : "none";
     this.refresh();
   }
@@ -399,12 +421,18 @@ export class ComparisonOperator implements TreeOperator {
     }
 
     // Navigation highlight overrides coloring while blinking.
-    if (node === this.highlightedId && this.blinkOn) {
+    if (this.blinkOn && this.isHighlighted(node)) {
       const size = (result.size as number) || 4;
       result = { ...result, color: this.highlightColor, size: size + 4, zIndex: 10 };
     }
 
     return result;
+  }
+
+  private isHighlighted(node: string): boolean {
+    if (this.highlightedKey === null) return false;
+    const layoutNode = this.viewer?.getNodeMap().get(node);
+    return !!layoutNode && this.keyOf(layoutNode.source) === this.highlightedKey;
   }
 
   private valueForNode(node: NewickNode): number | undefined {
@@ -445,8 +473,8 @@ export class ComparisonOperator implements TreeOperator {
    * on a freshly fitted subtree crops the surrounding structure: exactly the
    * context that made the node worth pointing at.
    */
-  highlightByKey(key: string, options: { center?: boolean } = {}): void {
-    if (!this.viewer) return;
+  highlightByKey(key: string, options: { center?: boolean } = {}): boolean {
+    if (!this.viewer) return false;
     let foundId: string | null = null;
     for (const [id, layoutNode] of this.viewer.getNodeMap()) {
       if (this.keyOf(layoutNode.source) === key) {
@@ -454,10 +482,17 @@ export class ComparisonOperator implements TreeOperator {
         break;
       }
     }
-    if (!foundId) return;
-    this.highlightedId = foundId;
+    if (!foundId) return false;
+    // Replaces any earlier mark: one located node at a time.
+    this.highlightedKey = key;
     if (options.center ?? true) this.centerOn(foundId);
     this.startBlink();
+    return true;
+  }
+
+  /** The key of the marked node, or null. */
+  getHighlightedKey(): string | null {
+    return this.highlightedKey;
   }
 
   private centerOn(id: string): void {
@@ -473,7 +508,8 @@ export class ComparisonOperator implements TreeOperator {
   }
 
   /**
-   * Flash the highlighted node `flashes` times, then remove the highlight.
+   * Flash the highlighted node `flashes` times, then remove the highlight —
+   * or, with `persistHighlight`, leave it steadily lit.
    *
    * The first on-phase is immediate, so two ticks buy one further flash: the
    * node goes dark on the odd tick and lights up again on the even one. The
@@ -489,7 +525,13 @@ export class ComparisonOperator implements TreeOperator {
     this.blinkTimer = setInterval(() => {
       ticks += 1;
       if (ticks >= last) {
-        this.clearHighlight();
+        if (this.persistHighlight) {
+          this.stopBlink();
+          this.blinkOn = true;
+          this.viewer?.applyReducers();
+        } else {
+          this.clearHighlight();
+        }
         return;
       }
       this.blinkOn = !this.blinkOn;
@@ -504,9 +546,10 @@ export class ComparisonOperator implements TreeOperator {
     }
   }
 
-  private clearHighlight(): void {
+  /** Remove the mark, flashing or steady. */
+  clearHighlight(): void {
     this.stopBlink();
-    this.highlightedId = null;
+    this.highlightedKey = null;
     this.blinkOn = true;
     this.viewer?.applyReducers();
   }

@@ -149,6 +149,8 @@ export interface ComparisonConfig {
   flashes?: number;
   /** Milliseconds per on- or off-phase of that flashing (default 300). */
   flashInterval?: number;
+  /** Keep the located node marked after flashing, until cleared (default false). */
+  persistHighlight?: boolean;
   membershipLabels?: [string, string];
   legend?: boolean;
   legendLabels?: [string, string];
@@ -413,6 +415,7 @@ function buildPanel(
       markerSize: c.markerSize,
       flashes: c.flashes,
       flashInterval: c.flashInterval,
+      persistHighlight: c.persistHighlight,
       membershipLabels: c.membershipLabels,
       legend: c.legend,
       legendLabels: c.legendLabels,

@@ -3302,6 +3302,46 @@ dropped to reconcile to the shared 10,659.
 
 ---
 
+## 33. A found leaf stays marked until the user clears it
+
+Reverses the "five flashes, then nothing" of §27.4c, on the first real usage evidence: a supervisor
+asked that a leaf found with *Find this leaf in the other tree* either blink for longer or keep a
+different colour until a button removes it. In use, the leaf was lost the moment the flashing
+stopped, while the eye was still going back and forth between the panels.
+
+**Decision:** flash, then stay. The leaf still flashes five times in magenta — the change is what
+draws the eye — and then stays magenta. The panel header names it, **"Found: 6555 ×"**; the × or
+Escape clears it. A new jump moves the mark, and there is one mark across both panels, so marks
+never pile up.
+
+**Why not blink for longer.** Any fixed duration is wrong for someone: too short for whoever looked
+away, too long for whoever has already found the leaf. Blinking that lasts is also what WCAG 2.2.2
+asks to be stoppable beyond five seconds — so a longer blink needs a stop control anyway, which is
+this design with the distraction left in.
+
+**What §27.4c was protecting against still holds** — for a mark the *view* leaves behind unasked,
+which would go on claiming a node is special. A mark the user asked for, named on screen and with a
+visible way to remove it, is their state rather than the view's claim. That is why the library
+default stays temporary (`persistHighlight: false`, so `lib_demo` is unchanged) and the app opts in.
+
+**Two things a lasting mark needed that a flash did not:**
+
+* **Held by key, not by graph id.** Graph ids are minted by layout, and a lasting mark outlives
+  re-layouts — a resize, the cladogram/phylogram switch, a re-slice. The operator now keeps the
+  node's key and resolves it on every draw.
+* **Independent of the colouring.** `setEnabled(false)` cleared the highlight, so switching the
+  divergence colouring off would have taken the user's mark with it. A persistent mark survives.
+
+**Escape is claimed by whatever it closes.** The context menu, the View options menu and the
+notice all close on Escape; each now calls `preventDefault()`, and the view clears the mark only on
+an Escape nobody claimed — closing a menu must not also remove the mark.
+
+Verified in the browser: the mark and chip still there after six seconds; Escape clears both;
+Escape with a menu open closes the menu and keeps the mark; a jump in the other direction moves the
+mark to the other panel; × clears it.
+
+---
+
 ## References and provenance
 
 Where every algorithm and every implementation came from. Bibliographic details are taken from the
