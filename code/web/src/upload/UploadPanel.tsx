@@ -72,8 +72,12 @@ export function UploadPanel({ onReady }: { onReady: (comparisonId: string) => vo
     api
       .metrics()
       .then((found) => {
+        // All of them, not only the usable ones: a metric the server knows
+        // but cannot run is shown disabled, with the reason. Listing only the
+        // usable ones hid the picker entirely when one was left, and on the
+        // deployment that read as the choice having disappeared.
+        setMetrics(found);
         const usable = found.filter((metric) => metric.available);
-        setMetrics(usable);
         // The remembered choice only if this server still offers it: a
         // metric whose runtime has gone would be sent and refused by name.
         const remembered = usable.some((metric) => metric.name === draft.metric)
@@ -222,13 +226,13 @@ export function UploadPanel({ onReady }: { onReady: (comparisonId: string) => vo
             onChange={(event) => setRightSpecies(event.target.value)}
           />
         </label>
-        {metrics.length > 1 ? (
+        {metrics.length > 0 ? (
           <label className="upload-metric">
             Compare with
             <select value={chosen} onChange={(event) => setChosen(event.target.value)}>
               {metrics.map((metric) => (
-                <option key={metric.name} value={metric.name}>
-                  {metric.title}
+                <option key={metric.name} value={metric.name} disabled={!metric.available}>
+                  {metric.available ? metric.title : `${metric.title} — not installed on this server`}
                 </option>
               ))}
             </select>
