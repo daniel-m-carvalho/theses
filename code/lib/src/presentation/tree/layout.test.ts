@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { NewickNode } from "./types";
-import { buildGraph, BRANCH_COLOR, type LayoutNode } from "./layout";
+import { buildGraph, BRANCH_COLOR, LEADER_COLOR, type LayoutNode } from "./layout";
 import { orderByName } from "./model";
 
 /** root(a, b(c, d)) — asymmetric, so depth and distance differ per tip. */
@@ -98,6 +98,76 @@ describe("buildGraph — layout modes", () => {
     const phylo = buildGraph(tree(), never, 100, "phylogram").nodeMap.get("named_b")!;
     // Same node, different x rule — the two modes must not agree by accident.
     expect(phylo.x).not.toBe(clad.x);
+  });
+});
+
+describe("buildGraph — phylogram tips", () => {
+  it("ends each tip's branch at its real distance, not at the aligned column", () => {
+    const { nodeMap } = buildGraph(tree(), never, 100, "phylogram");
+    const tips = leaves(nodeMap);
+    // Aligned for labels and bars, as before...
+    expect(new Set(tips.map((n) => n.x)).size).toBe(1);
+    // ...but the branch stops where the tree says, and tips differ.
+    for (const tip of tips) expect(tip.branchX).toBeLessThanOrEqual(tip.x);
+    expect(new Set(tips.map((n) => n.branchX)).size).toBeGreaterThan(1);
+  });
+
+  it("draws the rest as a leader that is neither branch-coloured nor owned by a node", () => {
+    const { graph } = buildGraph(tree(), never, 100, "phylogram");
+    const leaders = graph.filterEdges((_e, attrs) => attrs.leader === true);
+    expect(leaders.length).toBeGreaterThan(0);
+    for (const edge of leaders) {
+      const attrs = graph.getEdgeAttributes(edge);
+      expect(attrs.color).toBe(LEADER_COLOR);
+      expect(attrs.nodeId).toBeUndefined();
+    }
+  });
+
+  it("has no leaders and no branchX in a cladogram", () => {
+    const { graph, nodeMap } = buildGraph(tree(), never, 100, "cladogram");
+    expect(graph.filterEdges((_e, attrs) => attrs.leader === true)).toHaveLength(0);
+    for (const tip of leaves(nodeMap)) expect(tip.branchX).toBeUndefined();
+  });
+
+  it("mirrors branchX with everything else when reflected", () => {
+    const normal = buildGraph(tree(), never, 100, "phylogram", true, undefined, false);
+    const mirrored = buildGraph(tree(), never, 100, "phylogram", true, undefined, true);
+    for (const tip of leaves(normal.nodeMap)) {
+      expect(mirrored.nodeMap.get(tip.id)!.branchX).toBeCloseTo(-tip.branchX!, 6);
+    }
+  });
+});
+
+describe("buildGraph — phylogram scale", () => {
+  // An ultrametric tree with one long branch near the root, the shape of a
+  // UPGMA slice: every leaf is 100 from the root, and the median branch is 1.
+  const ultrametric = (): NewickNode => ({
+    name: "r",
+    branchset: [
+      { name: "A", length: 100 },
+      {
+        name: "",
+        length: 97,
+        branchset: [
+          { name: "B", length: 3 },
+          { name: "", length: 1, branchset: [{ name: "C", length: 2 }, { name: "D", length: 2 }] },
+        ],
+      },
+    ],
+  });
+
+  it("draws to scale by default: every leaf of an ultrametric tree ends at the same x", () => {
+    const { nodeMap } = buildGraph(ultrametric(), never, 100, "phylogram");
+    const ends = leaves(nodeMap).map((n) => n.branchX!);
+    for (const end of ends) expect(end).toBeCloseTo(100, 6);
+  });
+
+  it("caps long branches only when asked", () => {
+    const { nodeMap } = buildGraph(
+      ultrametric(), never, 100, "phylogram", true, undefined, false, undefined, true,
+    );
+    const ends = new Set(leaves(nodeMap).map((n) => n.branchX!.toFixed(6)));
+    expect(ends.size).toBeGreaterThan(1);
   });
 });
 

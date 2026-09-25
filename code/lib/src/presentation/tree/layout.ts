@@ -20,6 +20,14 @@ import {
 export const BRANCH_COLOR = "#000000";
 
 /**
+ * The dotted-line colour of a phylogram's leaders: the stretch from where a
+ * tip's branch really ends to the aligned column of tips. Light, because it is
+ * layout and not length — reading it as branch would be reading a distance the
+ * tree does not have.
+ */
+export const LEADER_COLOR = "#d4d4d4";
+
+/**
  * Turns a {@link NewickNode} tree into a renderable graphology Graph plus a
  * lookup from real graph-node IDs to their {@link LayoutNode}. This is the
  * shared substrate the viewer renders and every operator reads from — it does
@@ -38,6 +46,13 @@ export interface LayoutNode {
   children: LayoutNode[];
   /** The (pruned) source tree node this layout node was derived from. */
   source: NewickNode;
+  /**
+   * Phylogram tips only: the x where the branch actually ends. Tips are drawn
+   * at the aligned column `x` so labels and bar charts share a baseline; the
+   * branch stops here and a leader covers the rest. Absent in a cladogram,
+   * where the tip and the branch end coincide.
+   */
+  branchX?: number;
 }
 
 /** Shared precomputed stats passed to layout engines. */
@@ -75,7 +90,8 @@ export function buildGraph(
   hideInternalNodes: boolean = true,
   rerootOn?: string,
   reflect: boolean = false,
-  order: ChildOrder = orderByName
+  order: ChildOrder = orderByName,
+  clampBranches: boolean = false
 ): BuiltGraph {
   const graph = new Graph();
 
@@ -89,8 +105,16 @@ export function buildGraph(
   const maxD = maxDepth(prepared) || 1;
   const totalLeaves = countLeaves(prepared);
 
-  // Cap any single branch's length contribution so one long branch (e.g. an
-  // outgroup stem) can't dominate the distance-based scale.
+  // Optionally cap any single branch's length contribution so one long branch
+  // (e.g. an outgroup stem) can't dominate the distance-based scale.
+  //
+  // Off by default: a phylogram is a promise that lengths are to scale, and a
+  // capped branch is drawn at a distance the tree does not have, with nothing
+  // on screen to say so. It was on by default, and on a server-summarised
+  // UPGMA slice it was badly wrong — the few long branches near the root hold
+  // almost all of the height, and "8x the median" of a slice full of short tip
+  // branches cut 16 of 99 of them: leaves that are all 564 from the root were
+  // drawn at 12, 12 and 16, in a tree squashed to a height of 20.
   const medianBranch = (() => {
     const lens: number[] = [];
     (function collect(n: NewickNode) {
@@ -102,7 +126,9 @@ export function buildGraph(
     return lens[Math.floor(lens.length / 2)];
   })();
   const branchCap = medianBranch * 8 || maxDRaw;
-  const clampLength = (len: number) => Math.min(len, branchCap);
+  const clampLength = clampBranches
+    ? (len: number) => Math.min(len, branchCap)
+    : (len: number) => len;
 
   function clampedMaxRootDist(node: NewickNode, dist = 0): number {
     const d = dist + clampLength(node.length || 0);
@@ -126,6 +152,7 @@ export function buildGraph(
   if (reflect) {
     (function negate(n: LayoutNode) {
       n.x = -n.x;
+      if (n.branchX !== undefined) n.branchX = -n.branchX;
       n.children.forEach(negate);
     })(root);
   }
@@ -182,9 +209,15 @@ function makeRectEngine(mode: LayoutMode): LayoutEngine {
           // the 0..100 layout span), so all terminals line up vertically and
           // the bar charts start from a shared baseline regardless of depth or
           // branch length. Internal nodes keep their depth/distance-based x.
+          //
+          // In a phylogram that alignment used to stretch every terminal
+          // branch to the edge, so a tip's length was drawn as whatever was
+          // left over — not a phylogram. The branch now ends at its real
+          // distance (`branchX`) and a leader carries it to the column.
           const x = 100;
           const y = -(leafCounter++ * yScale);
-          return { id, label: node.name || "", x, y, isLeaf, isCollapsed, named: !!node.name, children: [], source: node };
+          const branchX = mode === "phylogram" ? computeX(myDist, depth) : undefined;
+          return { id, label: node.name || "", x, y, isLeaf, isCollapsed, named: !!node.name, children: [], source: node, branchX };
         }
 
         const x = computeX(myDist, depth);
@@ -247,7 +280,17 @@ function makeRectEngine(mode: LayoutMode): LayoutEngine {
           renderNode(child);
           const hStart = `h_${connSeq++}`;
           graph.addNode(hStart, { label: "", x: n.x, y: child.y, size: 0, color: "rgba(0,0,0,0)" });
-          graph.addEdge(hStart, child.id, { color: BRANCH_COLOR, size: 1, nodeId: child.id });
+          if (child.branchX !== undefined && child.branchX !== child.x) {
+            // Phylogram tip: the branch to its true length, then a leader.
+            // The leader has no `nodeId` and is flagged, so a colouring
+            // operator leaves it alone rather than painting layout as data.
+            const hEnd = `t_${connSeq++}`;
+            graph.addNode(hEnd, { label: "", x: child.branchX, y: child.y, size: 0, color: "rgba(0,0,0,0)" });
+            graph.addEdge(hStart, hEnd, { color: BRANCH_COLOR, size: 1, nodeId: child.id });
+            graph.addEdge(hEnd, child.id, { color: LEADER_COLOR, size: 1, leader: true });
+          } else {
+            graph.addEdge(hStart, child.id, { color: BRANCH_COLOR, size: 1, nodeId: child.id });
+          }
         }
       }
 

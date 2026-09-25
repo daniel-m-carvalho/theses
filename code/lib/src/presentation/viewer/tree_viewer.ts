@@ -141,6 +141,12 @@ export interface ViewerEvents extends Record<string, unknown> {
 
 export interface TreeViewerOptions {
   layoutMode?: LayoutMode; // default "cladogram"
+  /**
+   * Phylogram only: cap any branch at ~8x the median so one very long branch
+   * cannot flatten the rest. Default false — the drawing is then to scale,
+   * which is what a phylogram claims.
+   */
+  clampBranches?: boolean;
   maxNodes?: number; // default 200
   hideInternalNodes?: boolean; // default true
   /**
@@ -220,6 +226,7 @@ export class TreeViewer {
   private tree: NewickNode | null = null;
 
   private layoutMode: LayoutMode;
+  private clampBranches: boolean;
   private maxNodes: number;
   private hideInternalNodes: boolean;
   private rerootOn?: string;
@@ -283,6 +290,7 @@ export class TreeViewer {
   constructor(container: HTMLElement, options: TreeViewerOptions = {}) {
     this.container = container;
     this.layoutMode = options.layoutMode ?? "cladogram";
+    this.clampBranches = options.clampBranches ?? false;
     this.maxNodes = options.maxNodes ?? 200;
     this.hideInternalNodes = options.hideInternalNodes ?? true;
     this.rerootOn = options.rerootOn;
@@ -558,7 +566,8 @@ export class TreeViewer {
       this.hideInternalNodes,
       this.rerootOn,
       this.reflect,
-      this.childOrder
+      this.childOrder,
+      this.clampBranches
     );
     this.graph = graph;
     this.nodeMap = nodeMap;

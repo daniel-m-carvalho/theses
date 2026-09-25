@@ -297,14 +297,17 @@ interface LayoutNode {
   changes.
 - Built-in rectangular engine (`makeRectEngine`):
   - **cladogram** — x from depth (equal spacing per level).
-  - **phylogram** — x from cumulative (clamped) branch length.
+  - **phylogram** — x from cumulative branch length, to scale. Each tip's
+    branch stops at its real length; a light leader (`LEADER_COLOR`, flagged
+    `leader: true`, no `nodeId`) carries it to the aligned column.
   - **Leaf alignment.** All terminal tips (leaves and collapsed clades) are
     placed at a common x (the right edge of the 0–100 span) so they line up in a
     column and bar charts share a baseline. Internal nodes keep their
     depth/distance x.
-  - **Branch-length clamping.** A single very long branch (e.g. an outgroup
-    stem) is capped at ~8× the median branch so it can't dominate the
-    phylogram scale.
+  - **Branch-length clamping**, opt-in (`clampBranches: true`). Caps any
+    branch at ~8× the median so one very long branch (e.g. an outgroup stem)
+    can't dominate the scale. Off by default, because a capped branch is drawn
+    at a length the tree does not have.
   - **Connectors.** Horizontal/vertical dendrogram lines are drawn via invisible
     connector nodes (`v_*`, `h_*`), which are excluded from `nodeMap`. Each
     connector edge carries a `nodeId` attribute naming the real node it

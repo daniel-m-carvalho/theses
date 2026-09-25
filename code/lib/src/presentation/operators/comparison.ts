@@ -345,6 +345,8 @@ export class ComparisonOperator implements TreeOperator {
   private edgeStyle(edge: string, data: Record<string, unknown>): Record<string, unknown> {
     // Only the gradient presentation colors branches; membership paints nodes.
     if (!this.enabled || this.mode !== "gradient" || !this.colorEdges || !this.viewer) return data;
+    // A phylogram's leader is layout, not branch: it has no length to score.
+    if (data.leader) return data;
     // `nodeId` (set in layout) is the real node this edge belongs to — covers
     // both the horizontal branch into a child and the vertical fork of a clade.
     const nodeId = (data.nodeId as string | undefined) ?? this.viewer.getGraph()?.target(edge);
