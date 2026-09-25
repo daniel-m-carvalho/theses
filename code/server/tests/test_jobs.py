@@ -300,6 +300,32 @@ def test_an_unrooted_nj_tree_is_resolved_rather_than_refused(client, store):
     assert left.meta.n_nodes == 2 * left.meta.n_leaves - 1
 
 
+def test_the_listing_carries_the_names_not_just_the_ids(client, store):
+    """The list and the panels showed `0603c72037c7 vs 1531dacf584f`: the name
+    typed at upload and the file names were stored and never sent."""
+    from phylodelta.precompute.jobs import process_next
+
+    response = client.post(
+        "/api/v1/comparisons",
+        files={
+            "left_tree": ("aureus-rapidnj.nwk", io.BytesIO(LEFT)),
+            "right_tree": ("staph-nj.nwk", io.BytesIO(RIGHT)),
+        },
+        data={"name": "Aureus against Staph"},
+        headers={AUTH_HEADER: "alice"},
+    )
+    assert response.status_code == 202, response.text
+    comparison_id = response.json()["id"]
+    assert process_next("w1") is True
+
+    body = client.get("/api/v1/datasets", headers={AUTH_HEADER: "alice"}).json()
+    pair = next(p for p in body["pairs"] if p["id"] == comparison_id)
+    assert pair["display_name"] == "Aureus against Staph"
+    names = {t["id"]: t["display_name"] for t in body["trees"]}
+    assert names[pair["left"]] == "aureus-rapidnj"
+    assert names[pair["right"]] == "staph-nj"
+
+
 def test_a_failed_job_does_not_leave_a_readable_comparison(client, store):
     from phylodelta.precompute.jobs import process_next
 

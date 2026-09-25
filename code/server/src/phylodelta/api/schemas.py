@@ -38,6 +38,15 @@ class TreeSummary(BaseModel):
     """A tree's header — everything except the node columns themselves."""
 
     id: str = Field(examples=["vibrio-upgma"])
+    display_name: str = Field(
+        "",
+        description=(
+            "What to call the tree: the uploaded file's name without its "
+            "extension, or species and method for the catalogue. The id is "
+            "an opaque handle for URLs, not something to show a person."
+        ),
+        examples=["aureus-rapidnj-tree", "vibrio upgma"],
+    )
     species: str = Field(examples=["vibrio"])
     method: str = Field(examples=["upgma", "nj"])
     n_nodes: int
@@ -60,6 +69,9 @@ class PairSummary(BaseModel):
     """
 
     id: str = Field(examples=["vibrio-upgma__vibrio-nj"])
+    #: The name the uploader gave the comparison, or "<left> vs <right>" by
+    #: default. It was stored and never sent, so the list showed ids.
+    display_name: str = ""
     left: str
     right: str
     #: The species of both trees when they agree, otherwise "left/right".

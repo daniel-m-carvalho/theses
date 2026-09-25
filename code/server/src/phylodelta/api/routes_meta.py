@@ -115,7 +115,7 @@ def _pairs(owner: str, trees: list[TreeSummary]) -> list[PairSummary]:
         left, right = record.left_id, record.right_id
         status = record.status.value
         summary = PairSummary(
-            id=record.id, left=left, right=right,
+            id=record.id, display_name=record.display_name, left=left, right=right,
             species="", same_species=None, status=status, metrics=[],
         )
 
@@ -196,6 +196,7 @@ def datasets(owner: str = Depends(current_owner)) -> DatasetsResponse:
         trees.append(
             TreeSummary(
                 id=reader.meta.id,
+                display_name=record.display_name,
                 species=reader.meta.species,
                 method=reader.meta.method,
                 n_nodes=reader.meta.n_nodes,
