@@ -267,15 +267,37 @@ def test_an_unparseable_tree_fails_the_job_rather_than_the_worker(client, store)
     from phylodelta.precompute.jobs import process_next
 
     # Passes the structural check -- starts '(', ends ';' -- but is not a
-    # rooted binary tree.
-    comparison_id = upload(client, left=b"(A,B,C);")
+    # rooted binary tree. Four at the root: three would be resolved (NJ's
+    # unrooted form, trees/normalise.py), four is a polytomy.
+    comparison_id = upload(client, left=b"(A,B,C,D);")
     assert process_next("w1") is True
 
     record = db.comparison_for("alice", comparison_id)
     assert record.status is ComparisonStatus.FAILED
-    assert record.error
+    # Named the way the user knows it: which side, and no exception class or
+    # pre-order index. It used to read "ValueError: ... pre-order index 0".
+    assert record.error.startswith("The left tree (")
+    assert "root has 4 children" in record.error
+    assert "pre-order" not in record.error and "ValueError" not in record.error
     # The worker is still alive and still working.
     assert process_next("w1") is False
+
+
+def test_an_unrooted_nj_tree_is_resolved_rather_than_refused(client, store):
+    """The shape aureus-rapidnj-tree.nwk arrived in: three children at the root."""
+    from phylodelta.precompute.jobs import process_next
+    from phylodelta.trees.store import read_tree
+
+    comparison_id = upload(
+        client, left=b"((A:1,B:1):5,C:1,D:2);", right=b"(((A,B),C),D);"
+    )
+    assert process_next("w1") is True
+
+    record = db.comparison_for("alice", comparison_id)
+    assert record.status is ComparisonStatus.READY, record.error
+    left = read_tree(store / "trees" / record.left_id)
+    assert left.meta.resolved_root is True
+    assert left.meta.n_nodes == 2 * left.meta.n_leaves - 1
 
 
 def test_a_failed_job_does_not_leave_a_readable_comparison(client, store):

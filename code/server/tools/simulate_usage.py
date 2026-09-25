@@ -218,10 +218,12 @@ bad = [
     ({"left_tree": ("a.nwk", newick_a)}, "only one tree"),
     (
         {
-            "left_tree": ("a.nwk", b"((a:0.1,b:0.1),(c:0.1,d:0.1),(e:0.1,f:0.1));"),
+            # Four children at the root. Three is the unrooted form NJ tools
+            # write and is resolved at ingest; four is a real polytomy.
+            "left_tree": ("a.nwk", b"((a:0.1,b:0.1),(c:0.1,d:0.1),e:0.1,f:0.1);"),
             "right_tree": ("b.nwk", newick_b),
         },
-        "a tree that is not rooted binary",
+        "a tree with a polytomy at the root",
     ),
     (
         {"left_tree": ("a.nwk", b"not newick"), "right_tree": ("b.nwk", newick_b)},

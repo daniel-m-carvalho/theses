@@ -82,7 +82,7 @@ def test_a_successful_job_discards_the_raw_upload(client, store):
 
 def test_a_failed_job_keeps_its_bundle(client, store):
     """There the original file is the evidence of what went wrong."""
-    comparison_id = upload(client, left=b"(A,B,C);")
+    comparison_id = upload(client, left=b"(A,B,C,D);")
     process_next("w1")
 
     assert db.comparison_for("alice", comparison_id).status.value == "failed"

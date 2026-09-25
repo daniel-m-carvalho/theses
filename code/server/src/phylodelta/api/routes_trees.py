@@ -48,7 +48,8 @@ def tree_detail(
     return TreeDetail(
         id=meta.id, species=meta.species, method=meta.method,
         n_nodes=meta.n_nodes, n_leaves=meta.n_leaves, max_depth=meta.max_depth,
-        source=meta.source, suppressed_unary=meta.suppressed_unary, created=meta.created,
+        source=meta.source, suppressed_unary=meta.suppressed_unary,
+        resolved_root=meta.resolved_root, created=meta.created,
     )
 
 

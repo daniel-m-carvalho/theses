@@ -234,6 +234,7 @@ def write_succinct_tree(directory: Path, arrays: TreeArrays, meta: TreeMeta) -> 
         id=meta.id, species=meta.species, method=meta.method, source=meta.source,
         n_nodes=arrays.n_nodes, n_leaves=arrays.n_leaves, max_depth=arrays.max_depth,
         suppressed_unary=meta.suppressed_unary,
+        resolved_root=meta.resolved_root,
         format_version=FORMAT_VERSION,
         created=meta.created or datetime.now(UTC).isoformat(timespec="seconds"),
     )

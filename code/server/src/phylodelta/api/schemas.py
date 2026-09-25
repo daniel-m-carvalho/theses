@@ -188,6 +188,15 @@ class TreeDetail(TreeSummary):
             "numbering, not offsets into the source file."
         ),
     )
+    resolved_root: bool = Field(
+        False,
+        description=(
+            "The source tree had three children at its root -- the unrooted "
+            "form neighbour-joining tools write -- and was made binary by "
+            "joining two of them under a new zero-length branch. That clade is "
+            "not in the source file."
+        ),
+    )
     created: str = ""
 
 

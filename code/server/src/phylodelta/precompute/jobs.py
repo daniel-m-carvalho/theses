@@ -29,12 +29,22 @@ from pathlib import Path
 from .. import config, db, retention, uploads
 from ..db import jobs as queue
 from ..isolates.ingest import ingest_species
+from ..trees.normalise import NotRootedBinary
 from .pipeline import NotComparable, compute_pair, ingest_tree_file, load_metrics
 
 #: What a worker computes for an uploaded pair. RF is the headline number; the
 #: correspondence gradient that drives the colouring is computed once per pair
 #: regardless of which metrics run (§9).
 DEFAULT_METRICS = ["rf"]
+
+
+class TreeRejected(Exception):
+    """An uploaded tree the store cannot take, named the way the user knows it.
+
+    The job used to report ``ValueError: 1 internal node(s) are not binary,
+    first at pre-order index 0`` -- which tree, and what an index is, left for
+    the user to work out. This says "the left tree (aureus.nwk)" and what to do.
+    """
 
 
 @contextmanager
@@ -94,16 +104,22 @@ def run_comparison(comparison_id: str, metrics: list[str] | None = None) -> tupl
         ("right_tree", record.right_id, manifest.get("right_species", "")),
     ):
         db.set_dataset_status(dataset_id, db.DatasetStatus.INGESTING)
-        ingest_tree_file(
-            path=directory / files[role]["path"],
-            trees_dir=store / "trees",
-            dataset_id=dataset_id,
-            owner_id=owner,
-            species=species,
-            method="",
-            display_name=Path(files[role]["original_name"]).stem,
-            source_name=files[role]["original_name"],
-        )
+        try:
+            ingest_tree_file(
+                path=directory / files[role]["path"],
+                trees_dir=store / "trees",
+                dataset_id=dataset_id,
+                owner_id=owner,
+                species=species,
+                method="",
+                display_name=Path(files[role]["original_name"]).stem,
+                source_name=files[role]["original_name"],
+            )
+        except NotRootedBinary as exc:
+            side = role.split("_")[0]
+            raise TreeRejected(
+                f"The {side} tree ({files[role]['original_name']}) was not accepted: {exc}"
+            ) from exc
 
     # --- typing data ---------------------------------------------------
     # Keyed by the tree's dataset id, not by species. A species is a global
@@ -158,6 +174,11 @@ def process_next(worker: str | None = None, metrics: list[str] | None = None) ->
     try:
         with _heartbeat(comparison_id, who):
             built = run_comparison(comparison_id, metrics)
+    except TreeRejected as exc:
+        # Also a definite answer: the file itself has to change.
+        queue.finish(comparison_id, error=str(exc))
+        print(f"--- {comparison_id} failed: {exc}", flush=True)
+        return True
     except NotComparable as exc:
         # A definite answer, not a fault: these two trees share no labels.
         # Failing with the reason beats retrying something that cannot succeed.

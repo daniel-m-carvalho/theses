@@ -32,7 +32,11 @@ from ..metrics.store import CORRESPONDENCE_DIR, write_correspondence, write_pair
 from ..trees.correspondence import compute_correspondence
 from ..trees.materialise import MaterialisedPair
 from ..trees.newick import parse_newick_file
-from ..trees.normalise import assert_rooted_binary, suppress_unary
+from ..trees.normalise import (
+    assert_rooted_binary,
+    resolve_trifurcating_root,
+    suppress_unary,
+)
 from ..trees.reconcile import reconcile
 from ..trees.store import TreeMeta, read_tree, store_bytes, write_tree
 
@@ -89,6 +93,9 @@ def ingest_tree_file(
     # dataset that cannot be canonicalised fails ingest loudly rather than
     # producing subtly wrong comparisons later.
     arrays, suppressed = suppress_unary(arrays)
+    # And NJ tools write an unrooted tree with three children at the root.
+    # After unary suppression, so a `((A,B,C));` is seen for what it is.
+    arrays, resolved_root = resolve_trifurcating_root(arrays)
     assert_rooted_binary(arrays)
     parsed_ms = (time.perf_counter() - started) * 1000
 
@@ -105,6 +112,7 @@ def ingest_tree_file(
             n_leaves=arrays.n_leaves,
             max_depth=arrays.max_depth,
             suppressed_unary=suppressed,
+            resolved_root=resolved_root,
         ),
     )
     # Ownership lives in the database; the store path does not name an
@@ -136,6 +144,7 @@ def _ingest_into(sources, trees_dir: Path) -> int:
             f"depth {meta.max_depth:>4}  {done.size_bytes / 1024:>8,.0f} KB  "
             f"{done.size_bytes / meta.n_nodes:>5.1f} B/node  in {done.parsed_ms:,.0f} ms"
             + (f"  ({done.suppressed} unary node(s) suppressed)" if done.suppressed else "")
+            + ("  (trifurcating root resolved)" if meta.resolved_root else "")
         )
     return 0
 

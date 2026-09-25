@@ -69,6 +69,10 @@ class TreeMeta:
     #: pre-order indices are this store's canonical form, not offsets into the
     #: source file. See trees/normalise.py.
     suppressed_unary: int = 0
+    #: The source had three children at the root -- an unrooted tree, as NJ
+    #: tools write it -- and one clade was added to make it binary. See
+    #: trees/normalise.py.
+    resolved_root: bool = False
     format_version: int = FORMAT_VERSION
     created: str = ""
 
@@ -82,6 +86,7 @@ class TreeMeta:
             "n_leaves": self.n_leaves,
             "max_depth": self.max_depth,
             "suppressed_unary": self.suppressed_unary,
+            "resolved_root": self.resolved_root,
             "format_version": self.format_version,
             "created": self.created,
         }
@@ -97,6 +102,7 @@ class TreeMeta:
             n_leaves=raw["n_leaves"],
             max_depth=raw["max_depth"],
             suppressed_unary=raw.get("suppressed_unary", 0),
+            resolved_root=raw.get("resolved_root", False),
             format_version=raw.get("format_version", 0),
             created=raw.get("created", ""),
         )
@@ -254,6 +260,7 @@ def write_tree(directory: Path, arrays: TreeArrays, meta: TreeMeta) -> TreeMeta:
         n_leaves=arrays.n_leaves,
         max_depth=arrays.max_depth,
         suppressed_unary=meta.suppressed_unary,
+        resolved_root=meta.resolved_root,
         format_version=FORMAT_VERSION,
         created=meta.created or datetime.now(UTC).isoformat(timespec="seconds"),
     )

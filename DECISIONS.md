@@ -3253,6 +3253,55 @@ happens.
 
 ---
 
+## 32. An unrooted NJ tree is resolved at the root, not refused
+
+Found by the user uploading `aureus-rapidnj-tree.nwk` (29,208 leaves) against
+`staphylococcus-nj-tree.nwk` (10,659, every one of them also in aureus). The job failed with
+`ValueError: 1 internal node(s) are not binary, first at pre-order index 0 with 3 child(ren)`.
+
+**What the file is.** Every node binary except the root, which has three children — the file ends
+`...):12.938,'10103':0,'9630':3.4802);`. That is how rapidNJ and most neighbour-joining tools write
+an **unrooted** tree: three is the unrooted degree, and the root is only where the file had to begin.
+The staphylococcus NJ tree happens to be written binary; the rule cannot depend on which tool wrote it.
+
+**Decision (the user's call, 2026-09-25):** resolve a root of degree exactly three at ingest, after
+unary suppression (§1.4). The child on the **longest branch** stays under the root; the other two
+are joined under a new node with a zero-length branch. Recorded as `resolved_root` in `meta.json`
+and in `GET /trees/{id}`.
+
+**Alternatives considered.**
+
+| | |
+|---|---|
+| refuse, with a clear message | honest, but every NJ tree in the wild fails, over a convention — the argument §1.4 already accepted for unary roots |
+| midpoint rooting | a less arbitrary root, but it re-roots the *whole* tree: every clade can differ from the file, where resolving adds exactly one |
+| **resolve on the longest branch** | chosen: one clade added, none lost, and root-to-leaf distances unchanged |
+
+**Why longest and not first.** First would make the stored tree depend on which clade the tool
+happened to write first; the test writes the same tree both ways and requires the same clades.
+Longest is also the branch that most separates one part of the tree from the rest, the usual choice
+when there is no outgroup. NaN lengths count as shorter than any; ties go to file order.
+
+**What it costs, stated rather than hidden.** Rooted RF compares clades, and an unrooted tree has
+none until it is rooted, so *any* root the server picks is a choice the source file did not make.
+Resolving adds one clade, `{the two joined children}`, which can move RF by one. For aureus that is
+one clade in 29,206. The larger point is a finding in its own right: **rooted RF between two NJ
+trees measures their rootings as well as their topologies.** An unrooted metric would not, and is
+the right one to add if NJ pairs become the main use.
+
+**Still refused, and now by name.** Four or more children at the root, or any multifurcation below
+it, is a real polytomy, not a convention: resolving it means choosing among many binary trees.
+`assert_rooted_binary` raises `NotRootedBinary`, and the worker reports it as
+`The left tree (a.nwk) was not accepted: it is not a binary tree: its root has 4 children …` —
+naming the side and the file, not an exception class and a pre-order index the user has never seen.
+
+**Measured.** The aureus tree resolves in 83 ms (58,415 nodes = 2 × 29,208 − 1). The uploaded pair
+went through the HTTP API and the worker to *ready* in 0.9 s: RF 10,657, 18,549 aureus leaves
+dropped to reconcile to the shared 10,659.
+
+
+---
+
 ## References and provenance
 
 Where every algorithm and every implementation came from. Bibliographic details are taken from the
