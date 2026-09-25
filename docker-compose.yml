@@ -27,7 +27,7 @@ services:
     restart: unless-stopped
     ports:
       # Published so the API can be used directly — curl, /docs, another
-      # client — without going through the demo's proxy.
+      # client — without going through the web container's proxy.
       - "${PHYLODELTA_PORT:-8001}:8000"
     environment:
       PHYLODELTA_STORE: /data/store
@@ -37,7 +37,7 @@ services:
       PHYLODELTA_THREADS: "0"
       # --- authentication -------------------------------------------------
       # `mock` attaches a hardcoded user to every request and checks nothing,
-      # so the demo runs with no identity provider. It is opt-in and the
+      # so the app runs with no identity provider. It is opt-in and the
       # service logs a warning at startup while it is on.
       #
       # For real authentication set PHYLODELTA_AUTH=jwt and supply the issuer,
@@ -111,27 +111,16 @@ services:
         condition: service_healthy
 
   # The thesis frontend. Its nginx proxies /api/v1/ to phylodelta-service, so
-  # this one port is all a browser needs.
+  # this one port is all a browser needs. lib_demo is deliberately not
+  # deployed: it is the frozen static-file proof, not the application.
   phylodelta-web:
     build:
-      # The workspace root, for the same reason as the demo below.
+      # The workspace root, not code/web: the app consumes the library as a
+      # workspace package and npm cannot resolve it otherwise.
       context: ./code
       dockerfile: web/Dockerfile
     ports:
-      - "${PHYLODELTA_WEB_PORT:-8080}:80"
-    restart: unless-stopped
-    depends_on:
-      phylodelta-service:
-        condition: service_healthy
-
-  phylodelta-demo:
-    build:
-      # The workspace root, not the demo directory: the demo consumes the
-      # library as a workspace package and npm cannot resolve it otherwise.
-      context: ./code
-      dockerfile: lib_demo/Dockerfile
-    ports:
-      - "${PHYLODELTA_DEMO_PORT:-3001}:80"
+      - "${PHYLODELTA_WEB_PORT:-3001}:80"
     restart: unless-stopped
     depends_on:
       phylodelta-service:

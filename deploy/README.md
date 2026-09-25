@@ -6,15 +6,15 @@ docker compose up --build
 
 | | |
 |---|---|
-| **the app** | <http://localhost:8080> |
+| **the app** | <http://localhost:3001> |
 | API | <http://localhost:8001/api/v1/datasets> |
 | API docs | <http://localhost:8001/docs> |
-| `lib_demo` (frozen, static files) | <http://localhost:3001> |
 
-Five services: `phylodelta-seed` (builds the example catalogue once, then
-exits), `phylodelta-service` (the API), `phylodelta-worker` (computes uploads),
-`phylodelta-web` (the frontend, which proxies `/api/v1/` to the API) and
-`phylodelta-demo`.
+Four services: `phylodelta-seed` (builds the example catalogue once, then
+exits), `phylodelta-service` (the API), `phylodelta-worker` (computes uploads)
+and `phylodelta-web` (the frontend, which proxies `/api/v1/` to the API).
+`lib_demo` is not deployed: it is the frozen static-file proof that the library
+works without a server.
 
 ## The example catalogue builds itself, once
 
@@ -54,11 +54,11 @@ docker compose run --rm phylodelta-service phylodelta ingest-isolates
 
 ## Ports
 
-`8080`, `8001` and `3001` on the host; `80`, `8000` and `80` inside. Override
-with `PHYLODELTA_WEB_PORT`, `PHYLODELTA_PORT` and `PHYLODELTA_DEMO_PORT`, in the
+`3001` (the app) and `8001` (the API) on the host; `80` and `8000` inside.
+Override with `PHYLODELTA_WEB_PORT` and `PHYLODELTA_PORT`, in the
 environment or in a `.env` file next to `docker-compose.yml`.
 
-Only `8080` is needed by a browser: the web container proxies `/api/v1/` to the
+Only `3001` is needed by a browser: the web container proxies `/api/v1/` to the
 service, so the page and the API share one origin and no CORS configuration is
 involved.
 
