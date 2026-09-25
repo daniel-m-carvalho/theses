@@ -51,16 +51,16 @@ export function UploadPanel({ onReady }: { onReady: (comparisonId: string) => vo
    * not being able to choose is better than choosing something absent.
    */
   const [metrics, setMetrics] = useState<MetricSummary[]>([]);
-  const [chosen, setChosen] = useState<string[]>([]);
+  // One metric per comparison, chosen like the bar length is: a comparison
+  // is read under one metric, and the view shows the one it was computed with.
+  const [chosen, setChosen] = useState<string>("");
   useEffect(() => {
     api
       .metrics()
       .then((found) => {
         const usable = found.filter((metric) => metric.available);
         setMetrics(usable);
-        setChosen((current) =>
-          current.length ? current : usable.slice(0, 1).map((metric) => metric.name),
-        );
+        setChosen((current) => current || (usable[0]?.name ?? ""));
       })
       .catch(() => setMetrics([]));
   }, []);
@@ -90,7 +90,7 @@ export function UploadPanel({ onReady }: { onReady: (comparisonId: string) => vo
     if (name.trim()) form.append("name", name.trim());
     if (leftSpecies.trim()) form.append("left_species", leftSpecies.trim());
     if (rightSpecies.trim()) form.append("right_species", rightSpecies.trim());
-    if (chosen.length) form.append("metrics", chosen.join(","));
+    if (chosen) form.append("metrics", chosen);
 
     try {
       const accepted = await api.upload(form);
@@ -196,36 +196,22 @@ export function UploadPanel({ onReady }: { onReady: (comparisonId: string) => vo
             onChange={(event) => setRightSpecies(event.target.value)}
           />
         </label>
+        {metrics.length > 1 ? (
+          <label className="upload-metric">
+            Compare with
+            <select value={chosen} onChange={(event) => setChosen(event.target.value)}>
+              {metrics.map((metric) => (
+                <option key={metric.name} value={metric.name}>
+                  {metric.title}
+                </option>
+              ))}
+            </select>
+            <span className="field-help">
+              {firstSentence(metrics.find((metric) => metric.name === chosen)?.description ?? "")}
+            </span>
+          </label>
+        ) : null}
       </div>
-      {metrics.length > 1 ? (
-        <fieldset className="upload-metrics">
-          <legend>Compare with</legend>
-          {metrics.map((metric) => (
-            <label key={metric.name} className="switch">
-              <input
-                type="checkbox"
-                checked={chosen.includes(metric.name)}
-                onChange={() =>
-                  setChosen((current) =>
-                    current.includes(metric.name)
-                      ? current.filter((name) => name !== metric.name)
-                      : [...current, metric.name],
-                  )
-                }
-              />
-              {metric.title}
-              <span className="switch-note">{firstSentence(metric.description)}</span>
-            </label>
-          ))}
-          <p className="field-help">
-            {/* Worth saying, because the instinct is that each one doubles the
-                wait: the reconciliation and the clade correspondence are done
-                once per pair and every metric runs against them (§9). */}
-            Several cost little more than one — the expensive part, matching
-            clades between the trees, is done once and shared.
-          </p>
-        </fieldset>
-      ) : null}
 
       <p className="field-help">
         {/* Not decoration: sequence types are numbered per species, so across

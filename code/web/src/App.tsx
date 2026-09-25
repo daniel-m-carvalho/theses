@@ -19,6 +19,7 @@ import type {
   PairSummary,
   WhoAmI,
 } from "./api/types";
+import { headline, viewMetric } from "./comparison/metric";
 
 export function App() {
   const [me, setMe] = useState<WhoAmI | null>(null);
@@ -105,8 +106,13 @@ export function App() {
       setSummary(null);
       return;
     }
-    api.comparison(chosen.id).then(setSummary).catch(() => setSummary(null));
+    api
+      .comparison(chosen.id, viewMetric(chosen))
+      .then(setSummary)
+      .catch(() => setSummary(null));
   }, [chosen]);
+
+  const top = summary ? headline(summary) : null;
 
   return (
     <div className="app">
@@ -114,11 +120,11 @@ export function App() {
         <h1>PhyloDelta</h1>
         <p className="tagline">Compare large phylogenetic trees without loading them</p>
         <span className="spacer" />
-        {summary ? (
-          <span className="headline" title="Robinson-Foulds distance">
-            RF <strong>{Number(summary.summary.rf).toLocaleString()}</strong>
-            {summary.summary.rf_normalised !== undefined ? (
-              <em> ({Number(summary.summary.rf_normalised).toFixed(3)} normalised)</em>
+        {top ? (
+          <span className="headline" title={top.title}>
+            {top.label} <strong>{top.value.toLocaleString()}</strong>
+            {top.normalised !== undefined ? (
+              <em> ({top.normalised.toFixed(3)} normalised)</em>
             ) : null}
           </span>
         ) : null}

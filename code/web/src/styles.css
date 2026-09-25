@@ -267,7 +267,8 @@ body {
 
 .fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 6px; }
 .fields label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
-.fields input {
+.fields input,
+.fields select {
   padding: 7px 9px;
   border: 1px solid var(--line);
   border-radius: 7px;
@@ -568,23 +569,6 @@ body {
   color: var(--muted);
 }
 
-/* The metric choice, styled like the export panel's format group: one more
-   decision about the comparison, not a different kind of control. */
-.upload-metrics {
-  margin: 4px 0 0;
-  padding: 0;
-  border: 0;
-}
-
-.upload-metrics legend {
-  padding: 0;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.upload-metrics .field-help {
-  margin-top: 6px;
-}
+/* The metric: one of several, so a select like the bar length in the typing
+   footer. Its note is the chosen metric's first sentence, under the select. */
+.fields .upload-metric .field-help { margin: 0; }

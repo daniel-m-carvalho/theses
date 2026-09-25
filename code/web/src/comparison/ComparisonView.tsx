@@ -37,6 +37,7 @@ import {
   useSide,
   type SideState,
 } from "./useSide";
+import { viewMetric } from "./metric";
 
 /**
  * Panels are identical except for their label: the same budget, the same
@@ -271,11 +272,12 @@ export function ComparisonView({
   const [panelHeight, setPanelHeight] = useState(0);
   const autoBudget = readableBudget(panelHeight);
 
+  const metric = viewMetric(pair);
   const [left, leftActions] = useSide(
-    pair.left, pair.id, "rf", initial?.left, autoBudget, options.cladeSizes,
+    pair.left, pair.id, metric, initial?.left, autoBudget, options.cladeSizes,
   );
   const [right, rightActions] = useSide(
-    pair.right, pair.id, "rf", initial?.right, autoBudget, options.cladeSizes,
+    pair.right, pair.id, metric, initial?.right, autoBudget, options.cladeSizes,
   );
 
   // Which typing columns to show. Several at once is allowed; see
