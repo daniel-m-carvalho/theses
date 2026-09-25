@@ -36,7 +36,12 @@ export function Notice({
 
   useEffect(() => {
     close.current?.focus();
-    const key = (event: KeyboardEvent) => event.key === "Escape" && onDismiss();
+    const key = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      // Claimed, so an Escape that closed this does not also act underneath.
+      event.preventDefault();
+      onDismiss();
+    };
     document.addEventListener("keydown", key);
     return () => document.removeEventListener("keydown", key);
   }, [onDismiss]);

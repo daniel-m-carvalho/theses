@@ -56,7 +56,12 @@ export function CheckboxMenu({
     const away = (event: MouseEvent) => {
       if (!ref.current?.contains(event.target as Node)) setOpen(false);
     };
-    const key = (event: KeyboardEvent) => event.key === "Escape" && setOpen(false);
+    const key = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      // Claimed, so an Escape that closed the menu does not also act underneath.
+      event.preventDefault();
+      setOpen(false);
+    };
     document.addEventListener("mousedown", away);
     document.addEventListener("keydown", key);
     return () => {

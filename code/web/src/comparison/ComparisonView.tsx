@@ -113,11 +113,15 @@ function wedgeColorFrom(scale: SequentialColorScale) {
 /**
  * How a jump announces where it landed.
  *
- * Five flashes, then nothing. A permanent mark would go on claiming the node
- * is special for as long as the panel is open, when what actually happened is
- * that the view came here once — and it competes with the divergence colouring
- * for the same attention. What draws the eye is the change, not the colour, so
- * the node going dark between flashes is half of the signal.
+ * Five flashes to catch the eye — the change is what draws it, so the node
+ * going dark between flashes is half of the signal — and then the leaf stays
+ * marked until the user clears it or jumps again (§33).
+ *
+ * It used to be five flashes and then nothing, on the argument that a lasting
+ * mark would go on claiming the node is special. In use the leaf was lost the
+ * moment the flashing stopped, while the eye was still going between panels.
+ * A mark the user asked for, named in the panel header with a way to remove
+ * it, is theirs rather than a claim the view makes.
  */
 const ARRIVAL_FLASHES = 5;
 
@@ -191,6 +195,7 @@ const CONFIG: Config = {
     // concerned; `colorEdges` is what the switch moves.
     colorNodes: false,
     flashes: ARRIVAL_FLASHES,
+    persistHighlight: true,
     legend: true,
     legendLabels: ["Identical", "Diverged"],
     /*
@@ -311,6 +316,12 @@ export function ComparisonView({
   const rightHost = useRef<HTMLDivElement>(null);
   const handle = useRef<ComparisonHandle | null>(null);
   const [menu, setMenu] = useState<PendingMenu | null>(null);
+  /**
+   * The leaf a jump found, per panel, while it is marked — what the header
+   * chip names. One at a time across both panels: a new jump moves the mark
+   * rather than adding one, so marks never pile up.
+   */
+  const [found, setFound] = useState<[string | null, string | null]>([null, null]);
   // What is selected in each panel. The menu acts on this when opened away
   // from a node, which is the interaction the library's selection operator is
   // there for: pick a node, then ask what can be done with it.
@@ -521,9 +532,30 @@ export function ComparisonView({
       // `keyBy: "name"` means here, and is exact for a leaf. Not its camera
       // move: the panel was just re-rooted around this node, and centring
       // zooms in far enough to crop the neighbourhood that is the point.
-      panel.operators.comparison?.highlightByKey(label, { center: false });
+      if (!panel.operators.comparison?.highlightByKey(label, { center: false })) return;
+      // One mark across both panels: the other side's goes.
+      built.panels[side === 0 ? 1 : 0]?.operators.comparison?.clearHighlight();
+      setFound(side === 0 ? [label, null] : [null, label]);
     });
   }, [left.slice, right.slice, left.arrivedAt, right.arrivedAt, refreshKeys]);
+
+  const clearFound = useCallback((side: 0 | 1) => {
+    handle.current?.panels[side]?.operators.comparison?.clearHighlight();
+    setFound((current) => (side === 0 ? [null, current[1]] : [current[0], null]));
+  }, []);
+
+  // Escape clears the mark — unless it was pressed to close something else
+  // (a menu, a notice), which claims the key with preventDefault.
+  useEffect(() => {
+    if (!found[0] && !found[1]) return;
+    const key = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented || exporting) return;
+      clearFound(0);
+      clearFound(1);
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, [found, exporting, clearFound]);
 
   // Report where we are, so the URL names it and a refresh comes back here.
   useEffect(() => {
@@ -723,8 +755,14 @@ export function ComparisonView({
   return (
     <div className="comparison">
       <header className="comparison-bar">
-        <Side label="Left" name={names?.left} state={left} selected={selected[0]} />
-        <Side label="Right" name={names?.right} state={right} selected={selected[1]} />
+        <Side
+          label="Left" name={names?.left} state={left} selected={selected[0]}
+          found={found[0]} onClearFound={() => clearFound(0)}
+        />
+        <Side
+          label="Right" name={names?.right} state={right} selected={selected[1]}
+          found={found[1]} onClearFound={() => clearFound(1)}
+        />
       </header>
 
       <div className="panels">
@@ -802,11 +840,16 @@ function Side({
   name,
   state,
   selected,
+  found = null,
+  onClearFound,
 }: {
   label: string;
   name?: string;
   state: SideState;
   selected: number | null;
+  /** The leaf a jump found and marked here, if any. */
+  found?: string | null;
+  onClearFound?: () => void;
 }) {
   const slice = state.slice;
   return (
@@ -815,6 +858,20 @@ function Side({
         {label}: <strong title={state.treeId}>{name || state.treeId}</strong>
         {selected !== null ? (
           <span className="selected-node"> · node {selected} selected</span>
+        ) : null}
+        {found ? (
+          <span className="found-chip">
+            Found: <strong>{found}</strong>
+            <button
+              type="button"
+              className="found-clear"
+              onClick={onClearFound}
+              aria-label={`Clear the mark on ${found}`}
+              title="Clear the mark (Esc)"
+            >
+              ×
+            </button>
+          </span>
         ) : null}
       </p>
       {slice ? (

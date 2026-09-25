@@ -143,7 +143,7 @@ export function App() {
            * and leaves room for the next one.
            */
           <CheckboxMenu
-            summary="View"
+            summary="View options"
             align="right"
             items={[
               {

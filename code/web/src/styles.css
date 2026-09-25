@@ -93,6 +93,32 @@ body {
 .side-name { margin: 0; font-size: 13px; color: var(--muted); }
 .side-name strong { color: var(--ink); }
 .selected-node { color: var(--accent); }
+
+/* The found leaf: the jump's magenta, so the chip and the mark read as one. */
+.found-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 10px;
+  padding: 1px 4px 1px 8px;
+  border: 1px solid #d400ff;
+  border-radius: 999px;
+  background: color-mix(in srgb, #d400ff 8%, transparent);
+  color: var(--ink);
+  font-size: 12px;
+}
+.found-chip strong { color: #a000c0; }
+.found-clear {
+  border: 0;
+  background: none;
+  padding: 0 4px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+}
+.found-clear:hover, .found-clear:focus-visible { color: var(--ink); }
 .side-counts {
   margin: 2px 0 0;
   font-size: 12px;

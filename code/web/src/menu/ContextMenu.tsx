@@ -52,7 +52,10 @@ export function ContextMenu({
       if (!ref.current?.contains(event.target as Node)) onDismiss();
     };
     const key = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onDismiss();
+      if (event.key !== "Escape") return;
+      // Claimed, so an Escape that closed the menu does not also act underneath.
+      event.preventDefault();
+      onDismiss();
     };
     document.addEventListener("mousedown", away);
     document.addEventListener("keydown", key);
