@@ -31,6 +31,12 @@ export interface ViewOptions {
   barScale: "log" | "linear";
   /** Label every collapsed clade with its leaf count. */
   cladeSizes: boolean;
+  /**
+   * Cladogram: branch position by depth, so the eye reads topology. Phylogram:
+   * by branch length, so it reads distance. In the URL because the same tree
+   * drawn either way says different things.
+   */
+  layout: "cladogram" | "phylogram";
 }
 
 export const DEFAULT_OPTIONS: ViewOptions = {
@@ -40,6 +46,7 @@ export const DEFAULT_OPTIONS: ViewOptions = {
   columns: [],
   barScale: "log",
   cladeSizes: false,
+  layout: "cladogram",
 };
 
 export interface ViewState {
@@ -78,6 +85,7 @@ function parse(hash: string): ViewState {
       columns: query.getAll("col"),
       barScale: query.get("bs") === "linear" ? "linear" : "log",
       cladeSizes: query.get("cs") === "1",
+      layout: query.get("lm") === "phylogram" ? "phylogram" : "cladogram",
     },
   };
 }
@@ -94,6 +102,7 @@ function format(state: ViewState): string {
   for (const column of options.columns) query.append("col", column);
   if (options.barScale !== DEFAULT_OPTIONS.barScale) query.set("bs", options.barScale);
   if (options.cladeSizes) query.set("cs", "1");
+  if (options.layout !== DEFAULT_OPTIONS.layout) query.set("lm", options.layout);
   const tail = query.toString();
   return `#/c/${encodeURIComponent(state.comparison)}${tail ? `?${tail}` : ""}`;
 }

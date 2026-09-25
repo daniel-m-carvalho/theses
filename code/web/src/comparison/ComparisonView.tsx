@@ -535,7 +535,18 @@ export function ComparisonView({
     handle.current?.panels.forEach((panel) => {
       panel.operators.comparison?.setEnabled(options.gradient);
     });
-  }, [options.gradient]);
+    // `bothLoaded`: the panels are built only once both trees arrive, so a
+    // link with the gradient off (`g=0`) was applied to no panel and opened
+    // coloured. Same for the colour target below and the layout above.
+  }, [options.gradient, bothLoaded]);
+
+  // Cladogram or phylogram. The viewer re-lays itself out from the tree it
+  // already holds, so switching costs a render and no request. `bothLoaded`
+  // too, because the panels are built only once both trees arrive: a URL
+  // asking for a phylogram was otherwise applied to no viewer and lost.
+  useEffect(() => {
+    handle.current?.panels.forEach((panel) => panel.viewer.setLayoutMode(options.layout));
+  }, [options.layout, bothLoaded]);
 
   // Move the gradient between the branches and the wedges. Both operators are
   // involved because the wedge is not a Sigma node marker but an overlay the
@@ -554,7 +565,7 @@ export function ComparisonView({
         options.gradient && options.colorTarget === "clades" ? wedgeColor : CLADE_SHAPE.color,
       );
     });
-  }, [options.gradient, options.colorTarget]);
+  }, [options.gradient, options.colorTarget, bothLoaded]);
 
   // Feed the bar charts, and keep the legend in step with the scale that is
   // actually colouring them. The scale is primed with every category present

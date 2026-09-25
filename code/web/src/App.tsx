@@ -163,6 +163,23 @@ export function App() {
                 checked: options.cladeSizes,
                 note: "Label every collapsed clade with its leaf count",
               },
+              // How the trees are drawn: one of two, so a radio pair, like
+              // where the divergence goes.
+              {
+                key: "layout:cladogram",
+                label: "Cladogram",
+                checked: options.layout === "cladogram",
+                note: "Branch points by depth: read the topology",
+                group: "layout",
+                heading: "Draw the trees as",
+              },
+              {
+                key: "layout:phylogram",
+                label: "Phylogram",
+                checked: options.layout === "phylogram",
+                note: "Branch lengths to scale: read the distance",
+                group: "layout",
+              },
               // Where the gradient lands, not whether it is on — so the choice
               // is offered only while there is one to place.
               ...(options.gradient
@@ -180,6 +197,9 @@ export function App() {
               if (key === "gradient") setOptions({ gradient: !options.gradient });
               if (key === "typing") setOptions({ typing: !options.typing });
               if (key === "clades") setOptions({ cladeSizes: !options.cladeSizes });
+              if (key.startsWith("layout:")) {
+                setOptions({ layout: key.slice("layout:".length) as ViewOptions["layout"] });
+              }
               if (key.startsWith("colour:")) {
                 setOptions({
                   colorTarget: key.slice("colour:".length) as ViewOptions["colorTarget"],

@@ -70,6 +70,7 @@ describe("view state in the URL", () => {
           typing: true,
           columns: ["country", "year, collected"],
           cladeSizes: true,
+          layout: "phylogram",
         },
       }),
     );
@@ -81,6 +82,7 @@ describe("view state in the URL", () => {
     // A column name may contain the separator any joined encoding would use.
     expect(restored.columns).toEqual(["country", "year, collected"]);
     expect(restored.cladeSizes).toBe(true);
+    expect(restored.layout).toBe("phylogram");
     // Untouched defaults stay out of the URL.
     expect(window.location.hash).not.toContain("bs=");
   });
