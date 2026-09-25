@@ -119,7 +119,7 @@ export function App() {
     <div className="app">
       <header className="app-bar">
         <h1>PhyloDelta</h1>
-        <p className="tagline">Compare large phylogenetic trees without loading them</p>
+        <p className="tagline">Compare large phylogenetic trees</p>
         <span className="spacer" />
         {top ? (
           <span className="headline" title={top.title}>
